@@ -47,3 +47,6 @@ export interface StageEvent {
  * Emits only stages the client can actually see; no fabricated substeps.
  */
 export function stageEvents(prev: string, next: string, runtime: string): StageEvent[];
+
+/** Tracked files (NUL-delimited) minus those deleted from the working tree. */
+export function withoutDeleted(trackedZ: Buffer, deletedZ: Buffer): Buffer;

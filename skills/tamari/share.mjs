@@ -6,10 +6,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { resolveEndpoint } from "./login.mjs";
+import { classifyApiFailure, resolveEndpoint, unreachable } from "./login.mjs";
 
 
 function out(obj) { console.log(JSON.stringify(obj, null, 2)); }
+function failWith({ errorCode, error }) { fail(errorCode, error); }
 function fail(code, message) { out({ ok: false, errorCode: code, error: message }); process.exit(1); }
 
 /** Parse argv (after the script name) into a command. Pure — unit-tested. */
@@ -83,7 +84,7 @@ async function main() {
       method: "POST", headers: auth, body: JSON.stringify({ email: parsed.email, role: parsed.role }),
     });
     const body = await jsonOf(res);
-    if (!res.ok) fail(body.code ?? "request_failed", body.error ?? `HTTP ${res.status}`);
+    if (!res.ok) failWith(classifyApiFailure(res.status, body));
     return out({
       ok: true,
       invited: parsed.email,
@@ -97,14 +98,14 @@ async function main() {
   if (parsed.cmd === "list") {
     const res = await fetch(`${base}/invitations`, { headers: auth });
     const body = await jsonOf(res);
-    if (!res.ok) fail(body.code ?? "request_failed", body.error ?? `HTTP ${res.status}`);
+    if (!res.ok) failWith(classifyApiFailure(res.status, body));
     return out({ ok: true, grants: body.grants ?? [], invitations: body.invitations ?? [] });
   }
 
   // revoke: resolve the email against current access, then delete the right record.
   const listRes = await fetch(`${base}/invitations`, { headers: auth });
   const access = await jsonOf(listRes);
-  if (!listRes.ok) fail(access.code ?? "request_failed", access.error ?? `HTTP ${listRes.status}`);
+  if (!listRes.ok) failWith(classifyApiFailure(listRes.status, access));
   const target = resolveRevokeTarget(access, parsed.email);
   if (target.kind === "none") fail("not_found", `${parsed.email} has no access or pending invite to ${app}.`);
   const path = target.kind === "grant"
@@ -112,10 +113,15 @@ async function main() {
     : `invitations/${encodeURIComponent(target.id)}`;
   const res = await fetch(`${base}/${path}`, { method: "DELETE", headers: auth });
   const body = await jsonOf(res);
-  if (!res.ok) fail(body.code ?? "request_failed", body.error ?? `HTTP ${res.status}`);
-  out({ ok: true, revoked: parsed.email, kind: target.kind });
+  if (!res.ok) failWith(classifyApiFailure(res.status, body));
+  // The server answers { revoked: false } (still 200) when the record was
+  // already gone — say so rather than claiming an action that did not happen.
+  out({ ok: true, revoked: parsed.email, kind: target.kind, removed: body.revoked !== false });
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  await main();
+  main().catch((error) => {
+    console.log(JSON.stringify(unreachable(resolveEndpoint(process.env, readFileSync).api, error), null, 2));
+    process.exit(1);
+  });
 }

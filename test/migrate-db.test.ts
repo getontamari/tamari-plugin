@@ -18,6 +18,7 @@ import {
   rewriteSqlAlchemy,
   withManifestFromDisk,
   classifyDiskFailure,
+  PY_DATABASE_URL,
 } from "../skills/tamari/migrate-db.mjs";
 
 /** @typedef {import("../skills/tamari/migrate-db.mjs")} */
@@ -450,5 +451,29 @@ describe("from __future__ import guard (FIX 6)", () => {
     ];
     const match = detectPersistence(project).matches.find((m) => m.framework === "sqlalchemy")!;
     expect(match).toMatchObject({ framework: "sqlalchemy", action: "auto" });
+  });
+});
+
+/**
+ * The platform writes DATABASE_URL for node-postgres: `postgres://…?sslmode=no-verify`.
+ * SQLAlchemy refuses the scheme and libpq refuses the sslmode, so a Python app
+ * handed the raw value crashes at startup — on the platform only, after a deploy
+ * the plugin called successful. Every Python rewrite must normalise it.
+ */
+describe("Python rewrites normalise the node-postgres-shaped DATABASE_URL", () => {
+  it("exposes one expression that fixes both the scheme and the sslmode", () => {
+    expect(PY_DATABASE_URL).toContain('.replace("postgres://", "postgresql://", 1)');
+    expect(PY_DATABASE_URL).toContain('.replace("sslmode=no-verify", "sslmode=require")');
+    expect(PY_DATABASE_URL.startsWith('os.environ["DATABASE_URL"]')).toBe(true);
+  });
+  it("uses it in the SQLAlchemy rewrite, for both the engine and the Flask URI", () => {
+    const out = rewriteSqlAlchemy('engine = create_engine("sqlite:///./app.db")\napp.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///x.db"\n')!;
+    expect(out.newContent).toContain(`create_engine(${PY_DATABASE_URL})`);
+    expect(out.newContent).toContain(`app.config["SQLALCHEMY_DATABASE_URI"] = ${PY_DATABASE_URL}`);
+    expect(out.newContent).not.toMatch(/create_engine\(os\.environ\["DATABASE_URL"\]\)/);
+  });
+  it("uses it in the Django rewrite", () => {
+    const out = rewriteDjangoSettings("DATABASES = {\n    'default': {\n        'ENGINE': 'django.db.backends.sqlite3',\n        'NAME': BASE_DIR / 'db.sqlite3',\n    }\n}\n")!;
+    expect(out.newContent).toContain(`dj_database_url.config(default=${PY_DATABASE_URL}, conn_max_age=600, ssl_require=True)`);
   });
 });

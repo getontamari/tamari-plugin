@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { classifyFailure, manifestForDeploy, tarArgs, stageEvents, humanBytes } from "../skills/tamari/deploy.mjs";
+import { classifyFailure, manifestForDeploy, tarArgs, stageEvents, humanBytes, withoutDeleted } from "../skills/tamari/deploy.mjs";
 import { resolveToken } from "../skills/tamari/login.mjs";
 import { parseSecretsArgs, readSecretValue } from "../skills/tamari/secrets.mjs";
 
@@ -275,5 +275,25 @@ describe("readSecretValue", () => {
 
   it("accepts a piped value", () => {
     expect(readSecretValue({ kind: "stdin" }, deps({ readStdin: () => "piped\n" }))).toEqual({ value: "piped" });
+  });
+});
+
+// A file `rm`-ed but not yet `git rm`-ed is still in the index; tar then
+// fails on "Cannot stat" and the deploy died with a stack trace.
+describe("withoutDeleted", () => {
+  const z = (...names: string[]) => Buffer.from(names.map((n) => `${n}\0`).join(""), "utf8");
+
+  it("drops paths git reports as deleted from the working tree", () => {
+    expect(withoutDeleted(z("a.txt", "src/b.js", "c.md"), z("src/b.js")).toString("utf8")).toBe("a.txt\0c.md\0");
+  });
+  it("returns the input untouched when nothing is deleted", () => {
+    const tracked = z("a.txt", "b.txt");
+    expect(withoutDeleted(tracked, Buffer.alloc(0))).toBe(tracked);
+  });
+  it("keeps a path containing a newline intact (NUL-delimited on both sides)", () => {
+    expect(withoutDeleted(z("odd\nname.txt", "gone.txt"), z("gone.txt")).toString("utf8")).toBe("odd\nname.txt\0");
+  });
+  it("yields nothing when every tracked file is deleted, so deploy can refuse", () => {
+    expect(withoutDeleted(z("a"), z("a")).length).toBe(0);
   });
 });

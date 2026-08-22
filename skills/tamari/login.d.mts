@@ -49,3 +49,8 @@ export function pollUntil(
 
 /** The ready-to-relay sign-in instructions (markdown) carried as `message` by `login.mjs`. */
 export function signInMessage(fields: { url: string; userCode: string; expiresIn?: number }): string;
+
+/** Map a failed control-plane response to the plugin's error envelope (401 → not_signed_in, named code, 5xx → server_error). */
+export function classifyApiFailure(status: number, body: { error?: string; errorCode?: string; code?: string } | null | undefined): { errorCode: string; error: string };
+/** The envelope for "the API could not be reached at all". */
+export function unreachable(api: string, error: unknown): { ok: false; errorCode: "unreachable"; error: string };

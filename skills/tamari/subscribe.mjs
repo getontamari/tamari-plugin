@@ -7,9 +7,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { resolveEndpoint } from "./login.mjs";
+import { classifyApiFailure, resolveEndpoint, unreachable } from "./login.mjs";
 
 
+function failWith({ errorCode, error }) { fail(errorCode, error); }
 function fail(code, message) {
   console.log(JSON.stringify({ ok: false, errorCode: code, error: message }, null, 2));
   process.exit(1);
@@ -39,11 +40,15 @@ async function main() {
     body: JSON.stringify({ plan: parsed.plan }),
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) fail(body.errorCode ?? "error", body.error ?? `HTTP ${response.status}`);
+  if (!response.ok) failWith(classifyApiFailure(response.status, body));
   console.log(JSON.stringify({ ok: true, url: body.url }, null, 2));
-  console.log(`\nOpen this URL to subscribe to the ${parsed.plan} plan:\n${body.url}`);
+  // stdout is the JSON the agent parses; the human line goes to stderr.
+  process.stderr.write(`\nOpen this URL to subscribe to the ${parsed.plan} plan:\n${body.url}\n`);
 }
 
-if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
-  main().catch((error) => fail("error", error.message ?? String(error)));
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error) => {
+    console.log(JSON.stringify(unreachable(resolveEndpoint(process.env, readFileSync).api, error), null, 2));
+    process.exit(1);
+  });
 }

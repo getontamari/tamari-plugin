@@ -7,9 +7,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { resolveEndpoint } from "./login.mjs";
+import { classifyApiFailure, resolveEndpoint, unreachable } from "./login.mjs";
 
 
+function failWith({ errorCode, error }) { fail(errorCode, error); }
 function fail(code, message) {
   console.log(JSON.stringify({ ok: false, errorCode: code, error: message }, null, 2));
   process.exit(1);
@@ -39,10 +40,13 @@ async function main() {
     body: JSON.stringify({ code: parsed.code }),
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) fail(body.errorCode ?? "error", body.error ?? `HTTP ${response.status}`);
+  if (!response.ok) failWith(classifyApiFailure(response.status, body));
   console.log(JSON.stringify({ ok: true, alreadyEntitled: body.alreadyEntitled === true }, null, 2));
 }
 
-if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
-  main().catch((error) => fail("error", error.message ?? String(error)));
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error) => {
+    console.log(JSON.stringify(unreachable(resolveEndpoint(process.env, readFileSync).api, error), null, 2));
+    process.exit(1);
+  });
 }

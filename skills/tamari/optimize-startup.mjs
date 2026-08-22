@@ -246,7 +246,8 @@ function fail(code, message) {
 
 /** Read the tracked files into ProjectFile[]. Binary files (NUL byte) → content null. */
 function readProject() {
-  const paths = execFileSync("git", ["ls-files"], { encoding: "utf8" }).trim().split("\n").filter(Boolean);
+  // -z: a path may contain a newline, and the newline form quotes it.
+  const paths = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" }).split("\0").filter(Boolean);
   return paths.map((path) => {
     let content = null;
     try {

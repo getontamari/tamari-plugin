@@ -11,7 +11,8 @@
 // arrived as one vague error and agents looped on server-side problems by
 // rewriting projects that were already correct.
 //
-// Companion: `lib/plugin-contract.ts` in the platform repository.
+// Companion: the `errorCode` literals in `lib/deploy.ts`, `lib/build.ts` and
+// `app/api/**` of the platform repository — there is no single file there yet.
 
 import { readFileSync } from "node:fs";
 
@@ -37,6 +38,7 @@ const PLATFORM_ERROR_CODES = [
   // Not the project's fault: editing files cannot help, a retry might.
   "app_unavailable",
   "build_submit_failed",
+  "database_admission_denied",
   "database_provision_failed",
   "provision_failed",
   "secrets_decrypt_failed",

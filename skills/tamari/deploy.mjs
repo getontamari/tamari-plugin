@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cachedEmail, resolveEndpoint } from "./login.mjs";
+import { cachedEmail, resolveEndpoint, unreachable } from "./login.mjs";
 
 // Endpoint and credential resolved together — the stored token is bound
 // to the default host, so a stray TAMARI_API cannot carry it off-platform.
@@ -134,6 +134,21 @@ export function tarArgs(publishDir, archivePath) {
     : ["-czf", archivePath, "--null", "-T", "-"];
 }
 
+/**
+ * The tracked files minus those deleted from the working tree. Pure — unit-tested.
+ *
+ * `git ls-files` lists what the index knows, including a file that has been
+ * `rm`-ed but not yet `git rm`-ed — ordinary mid-refactor state. tar then
+ * fails on "Cannot stat", which used to surface as a stack trace. Both inputs
+ * are NUL-delimited (`-z`), for the reasons tarArgs gives.
+ */
+export function withoutDeleted(trackedZ, deletedZ) {
+  const deleted = new Set(deletedZ.toString("utf8").split("\0").filter(Boolean));
+  if (deleted.size === 0) return trackedZ;
+  const kept = trackedZ.toString("utf8").split("\0").filter((p) => p && !deleted.has(p));
+  return Buffer.from(kept.map((p) => `${p}\0`).join(""), "utf8");
+}
+
 /** Human-readable byte size for status detail. Pure — unit-tested. */
 export function humanBytes(n) {
   if (n < 1024) return `${n} B`;
@@ -211,7 +226,10 @@ async function main() {
   } else {
     // -z gives NUL-delimited names with no quoting, which is what `tar --null`
     // expects. Never split this on a newline: a filename may contain one.
-    const tracked = execFileSync("git", ["ls-files", "-z"]);
+    const tracked = withoutDeleted(
+      execFileSync("git", ["ls-files", "-z"]),
+      execFileSync("git", ["ls-files", "-z", "--deleted"]),
+    );
     if (tracked.length === 0) fail("no_files", "No git-tracked files to deploy.");
     execFileSync("tar", tarArgs(null, ARCHIVE), { input: tracked });
   }
@@ -292,5 +310,8 @@ async function main() {
 
 // Run only as the CLI, not when imported by a test.
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  await main();
+  await main().catch((error) => {
+    console.log(JSON.stringify(unreachable(API, error), null, 2));
+    process.exit(1);
+  });
 }

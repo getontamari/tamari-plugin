@@ -38,3 +38,6 @@ export function classifyDiskFailure(
   phase: "read" | "write",
   err: unknown,
 ): { errorCode: string; error: string };
+
+/** The injected DATABASE_URL normalised for Python drivers (postgresql:// scheme, sslmode=require). */
+export const PY_DATABASE_URL: string;
