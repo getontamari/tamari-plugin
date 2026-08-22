@@ -22,23 +22,12 @@ description: >
 One command takes a project from this directory to a live, private HTTPS URL. The
 user should not have to think about containers, DNS, or cloud configuration.
 
-## Finding the scripts — do this first
+## Where the scripts live
 
-Every command below runs a script that ships with this plugin. **Resolve where
-it lives once, then use that literal path for the rest of the session:**
-
-```bash
-ls -d "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/cache/*/tamari/*}"/skills/tamari 2>/dev/null | tail -1
-```
-
-`$CLAUDE_PLUGIN_ROOT` is set when a slash command runs, and **not set when you
-are invoked conversationally** — which is most of the time — so expect the
-fallback to be the normal case rather than the exception. Shell variables do not
-survive between commands, so keep the resolved path and write it out in full
-each time rather than exporting it.
-
-Below, `<scripts>` means that directory. A command written as
-`node "<scripts>/deploy.mjs"` means run `node /the/path/you/resolved/deploy.mjs`.
+Every command below runs a script that ships with this plugin, at
+`${CLAUDE_PLUGIN_ROOT}/skills/tamari/`. Claude Code fills in that path before you
+read this, so the commands below can be run exactly as written — do not search
+for the directory or rewrite the path.
 
 ## Start (priming)
 
@@ -53,11 +42,14 @@ command. Then agree the plan: they build, you wire the deployment contract as yo
 If a deploy returns `not_signed_in`, sign in with the device flow — no token to
 copy, and sign-up happens inline on first use:
 
-1. Run `node "<scripts>/login.mjs"`. It prints `{ url, userCode }`.
+1. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs"`. It prints `{ url, userCode }`.
 2. Show the user the `url` (a clickable link) and the `userCode`; ask them to open
    it, sign in or sign up, check the code matches, and click **Approve**.
-3. Run `node "<scripts>/login.mjs" --wait`. It blocks until
-   they approve, then saves the credential to `~/.tamari/credentials.json`.
+3. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs" --wait`. It polls for
+   up to 90 seconds. On `{ ok: true, email }` the credential is saved to
+   `~/.tamari/credentials.json`. On `{ ok: false, errorCode: "authorization_pending" }`
+   they have not approved yet — run the same `--wait` command again (as many times
+   as needed; nothing is lost between runs). On `expired_token` start over from step 1.
 4. Redeploy.
 
 `TAMARI_TOKEN` still works as an override (CI) and takes precedence.
@@ -77,15 +69,15 @@ stash them. Do not commit on their behalf.
    no server → static. If nothing matches, say which files Tamari looks for; do not
    guess.
 2. **Persistence.** SQLite writes to a local file that is wiped on the next cold
-   start. Run `node "<scripts>/migrate-db.mjs"` and act on
+   start. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/migrate-db.mjs"` and act on
    its `action`: `none` (nothing to do) · `auto` (it rewired config to the injected
    Postgres `DATABASE_URL` — confirm `changed`, warn on any `dataAtRisk`, relay
    `warnings`/`nextSteps`) · `warn` (not safe to automate — show `nextSteps`, let the
    user decide; never silently ship an app that depends on a local SQLite file).
-3. **Startup (Next.js).** Run `node "<scripts>/optimize-startup.mjs"`
+3. **Startup (Next.js).** Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/optimize-startup.mjs"`
    and act on its `action`: `none` · `standalone` (smaller container — tell the user)
    · `static-export` (build with `npm run build`; if `out/` appears, deploy static via
-   `TAMARI_PUBLISH_DIR=out node "<scripts>/deploy.mjs"` — zero
+   `TAMARI_PUBLISH_DIR=out node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/deploy.mjs"` — zero
    cold start; if the build fails, revert `next.config.*` and deploy as a container)
    · `warn` (show `nextSteps`).
 4. **Health check.** Ensure a `/healthz` route returns 200 so waking finishes before
@@ -110,7 +102,7 @@ stash them. Do not commit on their behalf.
 
 ## Deploy
 
-Run `node "<scripts>/deploy.mjs"` (or, for a static export,
+Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/deploy.mjs"` (or, for a static export,
 prefix `TAMARI_PUBLISH_DIR=out`). It streams NDJSON stage events on stderr — one per
 real stage (`upload`, `build`, `provision`/`publish`, `live`) — and prints the final
 result as JSON on stdout. Render the events as a ticking `✓` checklist with the
@@ -133,7 +125,7 @@ On `{ ok: false, errorCode }`:
 | `static_publish_failed` | Fix what the message names (e.g. add an `index.html`), then redeploy |
 | `revision_failed` | Your app crashed (or never listened on `PORT`) at startup — the message carries Cloud Run's reason. Fix the app's startup path locally, verify it binds `process.env.PORT`, then redeploy |
 | `app_id_unavailable` · `app_id_impersonation` | Choose a different `app` in `tamari.json` |
-| `entitlement_required` | Dynamic apps need an invite or a card. Run `node "<scripts>/redeem.mjs" <code>` — or deploy a static app (free) |
+| `entitlement_required` | Dynamic apps need an invite or a card. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/redeem.mjs" <code>` — or deploy a static app (free) |
 | `app_quota_exceeded` · `always_on_slot_exceeded` | Run `status.mjs` first and show them what they actually have — the limit should never be news delivered mid-deploy. Then offer both: delete an app they no longer need (`delete.mjs <app-id>`, irreversible — confirm first), or subscribe to a higher plan (`subscribe.mjs [personal\|pro]`) |
 | `not_signed_in` | Sign in with the device flow above — run `login.mjs`, show the URL, then `login.mjs --wait`. Do not modify the project |
 | `credential_host_refused` | `TAMARI_API` points somewhere other than Tamari, so the stored credential was deliberately **not** sent. **Do not work around this** — do not set `TAMARI_TOKEN` to make it go away, and do not read `~/.tamari/credentials.json`. Tell the user what `TAMARI_API` is set to and where it came from: if they did not set it themselves, treat it as hostile, because that variable is how a stored full-account token gets stolen |
@@ -156,7 +148,7 @@ ordinary words — "share this with my wife", "add my Stripe key", "why is it
 slow the first time?". Run these directly; do not tell the user to type a slash
 command, and do not wait to be given one.
 
-- **Account, apps, plan and quota:** `node "<scripts>/status.mjs"`.
+- **Account, apps, plan and quota:** `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/status.mjs"`.
   This answers "who am I signed in as?", "which apps do I have?", "what plan am I on?"
   and "how close am I to the limit?" — run it rather than guessing from files on disk,
   and run it *before* suggesting an upgrade, so the advice is about their real numbers.
@@ -180,14 +172,14 @@ command, and do not wait to be given one.
   the stored credential was revoked; say so and sign in again, and do **not** report
   `formerAccount` as the current account · `unreachable` → the network, not the account;
   `lastKnownAccount` is an unconfirmed hint from the last sign-in, so name it as such.
-- **Share:** `node "<scripts>/share.mjs" invite <email> [viewer|editor]`,
+- **Share:** `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/share.mjs" invite <email> [viewer|editor]`,
   `… revoke <email>`, `… list`. Private by default; verified-email invitations only; revoke
   enforced within ~10s.
   **If `invite` returns `superseded: true`, lead with the `warning`.** Inviting an address
   that already had a pending invitation revokes the old one, so any link the user already
   sent that person is now dead and the recipient is never told — nothing emails invitations.
   Give them the new link and say plainly that the previous one has to be replaced.
-- **Secrets:** `node "<scripts>/secrets.mjs" set KEY --from-file <path> | list | unset KEY`.
+- **Secrets:** `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/secrets.mjs" set KEY --from-file <path> | list | unset KEY`.
   Encrypted, injected at deploy, never in `tamari.json`; redeploy to apply.
 
   **Never ask the user to type a secret into the conversation, and never put one
@@ -219,13 +211,13 @@ command, and do not wait to be given one.
   `list` reports `inert: true` when an app that once had a runtime has been converted to
   static — those stored secrets are unreadable by anything, and `unset` still removes them.
 - **Entitlements:** dynamic apps need an invite
-  (`node "<scripts>/redeem.mjs" <code>`) or a plan
-  (`node "<scripts>/subscribe.mjs" [personal|pro]`); static sites
+  (`node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/redeem.mjs" <code>`) or a plan
+  (`node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/subscribe.mjs" [personal|pro]`); static sites
   are free.
 - **"Why is it slow the first time?"** — that is the app waking from sleep, not a fault.
   Sleeping costs nothing to run; the first request pays a few seconds. A static site never
   sleeps, so if the project can export statically, `optimize-startup.mjs` is the answer.
-- **Delete:** `node "<scripts>/delete.mjs" <app-id>`.
+- **Delete:** `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/delete.mjs" <app-id>`.
   **Confirm with the user first, every time.** It removes the service or
   published files, the database, the secrets and everyone's access; it cannot be
   undone; and the app id is **retired**, so that hostname can never be deployed

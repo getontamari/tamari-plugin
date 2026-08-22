@@ -51,37 +51,43 @@ describe("skill reachability", () => {
     expect(all.length).toBeGreaterThanOrEqual(scripts.length);
   });
 
-  // A script nobody can find is a capability the product does not have. The
-  // body refers to them through the placeholder it tells the agent to resolve,
-  // so the assertion is that the filename appears in a runnable command — not
-  // that a particular path prefix does.
-  it.each(scripts)("%s is runnable from the body", (script) => {
-    expect(skill).toContain(`<scripts>/${script}`);
+  // A script nobody can find is a capability the product does not have.
+  // `${CLAUDE_PLUGIN_ROOT}` — braces required — is substituted by Claude Code
+  // in plugin skill markdown and in plugin command bodies before the model
+  // sees them. The bare `$CLAUDE_PLUGIN_ROOT` is substituted by nothing and is
+  // not exported to the Bash tool, so it reaches the shell empty and the path
+  // becomes `/skills/tamari/login.mjs`. That was a real failure: every
+  // /tamari:* command died with MODULE_NOT_FOUND on first use.
+  const ROOT = "${CLAUDE_PLUGIN_ROOT}";
+  const BARE = /\$CLAUDE_PLUGIN_ROOT(?![}\w])/;
+
+  it.each(scripts)("%s is runnable from the skill body", (script) => {
+    expect(skill).toContain(`node "${ROOT}/skills/tamari/${script}"`);
   });
 
-  /**
-   * $CLAUDE_PLUGIN_ROOT is expanded in `commands/*.md`, which Claude Code
-   * processes, and is NOT set in the shell the agent runs commands in. A body
-   * that told the agent to use it produced a failed first command and a hunt
-   * for the directory — recoverable by a capable agent, and indistinguishable
-   * from a broken plugin to anyone else.
-   */
-  it("does not tell the agent to use a variable the shell will not have", () => {
-    const body = skill.split("---").slice(2).join("---");
-    const invocations = body.match(/node "[^"]+"/g) ?? [];
-    expect(invocations.length).toBeGreaterThan(5);
-    for (const line of invocations) expect(line).not.toContain("CLAUDE_PLUGIN_ROOT");
+  it("never uses the bare form, which the shell will not have", () => {
+    expect(skill).not.toMatch(BARE);
+    for (const f of readdirSync(CMD_DIR).filter((f) => f.endsWith(".md"))) {
+      expect(readFileSync(`${CMD_DIR}/${f}`, "utf8"), f).not.toMatch(BARE);
+    }
   });
 
-  // The commands are user-invoked and expanded before the agent sees them, so
-  // there the variable is correct and must stay.
-  it("keeps the variable in the slash commands, where it does work", () => {
+  it("uses the braced form in every slash command that runs a script", () => {
     const withScripts = readdirSync(CMD_DIR)
       .filter((f) => f.endsWith(".md"))
       .map((f) => readFileSync(`${CMD_DIR}/${f}`, "utf8"))
       .filter((c) => c.includes(".mjs"));
     expect(withScripts.length).toBeGreaterThan(3);
-    for (const c of withScripts) expect(c).toContain("CLAUDE_PLUGIN_ROOT");
+    for (const c of withScripts) {
+      for (const line of c.match(/node "[^"]+"/g) ?? []) expect(line).toContain(ROOT);
+    }
+  });
+
+  // Guessing at the install path is how the old resolver broke: a glob inside
+  // double quotes never expands. There is no need to resolve anything.
+  it("does not tell the agent to go hunting for the scripts", () => {
+    expect(skill).not.toMatch(/plugins\/cache/);
+    expect(skill).not.toMatch(/<scripts>/);
   });
 
   const description = skill.split("---")[1] ?? "";

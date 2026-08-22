@@ -5,7 +5,7 @@ argument-hint: "invite <email> [viewer|editor] | revoke <email> | list"
 
 # Share a Tamari app
 
-Run `node "$CLAUDE_PLUGIN_ROOT/skills/tamari/share.mjs" $ARGUMENTS` from the app's directory (it reads the app id from `tamari.json`).
+Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/share.mjs" $ARGUMENTS` from the app's directory (it reads the app id from `tamari.json`).
 
 - `invite <email> [viewer|editor]` (default `editor`) → confirm who was invited and their role. Note they get a link at ontamari.com/invite, and access is granted only if their identity provider has **verified** that email — an invite can't be claimed by someone who merely types the address. There is no public "anyone with the link" mode.
   - If the response has `superseded: true`, **lead with the `warning`**: this address already had a pending invitation, that one is now revoked, and any link already sent to them has stopped working. The recipient isn't told — nothing emails invitations — so the user has to send the new link themselves.

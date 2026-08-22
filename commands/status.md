@@ -4,7 +4,7 @@ description: Show which account this machine is signed in as, its plan, its app 
 
 # Tamari account status
 
-Run `node "$CLAUDE_PLUGIN_ROOT/skills/tamari/status.mjs"`. It needs no `tamari.json` — it
+Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/status.mjs"`. It needs no `tamari.json` — it
 is about the account, not the project, so it works from anywhere.
 
 Report, in this order:
