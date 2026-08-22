@@ -1,0 +1,16 @@
+{
+  "name": "tamari",
+  "description": "Deploy the current project to Tamari \u2014 a private HTTPS URL on your phone.",
+  "version": "0.11.0",
+  "author": {
+    "name": "Tamari"
+  },
+  "homepage": "https://ontamari.com",
+  "repository": "https://github.com/ontamari/tamari-plugin",
+  "license": "MIT",
+  "keywords": [
+    "deploy",
+    "hosting",
+    "claude-code"
+  ]
+}

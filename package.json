@@ -1,0 +1,16 @@
+{
+  "name": "tamari-plugin",
+  "private": true,
+  "type": "module",
+  "description": "The Tamari plugin for Claude Code \u2014 deploy a project to a private HTTPS URL you open on your phone.",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.7",
+    "@types/node": "^22.0.0"
+  }
+}

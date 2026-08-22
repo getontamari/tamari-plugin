@@ -1,0 +1,25 @@
+{
+  "name": "tamari",
+  "owner": {
+    "name": "Tamari",
+    "url": "https://ontamari.com"
+  },
+  "plugins": [
+    {
+      "name": "tamari",
+      "source": "./",
+      "description": "Deploy tiny web apps to a private HTTPS URL you open on your phone.",
+      "author": {
+        "name": "Tamari",
+        "url": "https://ontamari.com"
+      },
+      "license": "MIT",
+      "keywords": [
+        "deploy",
+        "hosting",
+        "claude-code",
+        "pwa"
+      ]
+    }
+  ]
+}
