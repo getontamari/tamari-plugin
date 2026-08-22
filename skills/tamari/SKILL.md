@@ -72,12 +72,15 @@ stash them. Do not commit on their behalf.
    `requirements.txt`/`pyproject.toml` → python · `go.mod` → go · `index.html` with
    no server → static. If nothing matches, say which files Tamari looks for; do not
    guess.
-2. **Persistence.** SQLite writes to a local file that is wiped on the next cold
-   start. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/migrate-db.mjs"` and act on
+2. **Persistence.** SQLite writes to a local file that is wiped every time the app
+   sleeps. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/migrate-db.mjs"` and act on
    its `action`: `none` (nothing to do) · `auto` (it rewired config to the injected
-   Postgres `DATABASE_URL` — confirm `changed`, warn on any `dataAtRisk`, relay
-   `warnings`/`nextSteps`) · `warn` (not safe to automate — show `nextSteps`, let the
-   user decide; never silently ship an app that depends on a local SQLite file).
+   Postgres `DATABASE_URL` and set `requiresDatabase` — confirm `changed`, relay
+   `warnings`) · `warn` (not safe to automate — **port the data layer to Postgres
+   yourself** following `nextSteps`, then set `requiresDatabase: true`). `deploy.mjs`
+   enforces this: it refuses with `local_database_detected` rather than ship an app
+   whose data would not survive. `dataAtRisk` lists local data files; do not copy
+   their contents unless the user asks.
 3. **Startup (Next.js).** Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/optimize-startup.mjs"`
    and act on its `action`: `none` · `standalone` (smaller container — tell the user)
    · `static-export` (build with `npm run build`; if `out/` appears, deploy static via
@@ -125,6 +128,7 @@ On `{ ok: false, errorCode }`:
 | `errorCode` | What to do |
 |---|---|
 | `invalid_manifest` | Fix the `tamari.json` fields named in the message, then redeploy |
+| `local_database_detected` | Refused **before upload**, by this plugin: the app keeps its data in a local database file (SQLite) and `requiresDatabase` is false, so every row would vanish the first time the app sleeps. The user asked you to deploy; do not hand this back to them as an error — **fix it and redeploy**. Run `migrate-db.mjs`: where it reports `auto` it has already rewired the framework and set `requiresDatabase`; where it reports `warn` (raw `sqlite3`, `better-sqlite3`, Drizzle, Knex, Go drivers…) **port the data layer to Postgres yourself** using its `nextSteps` — usually one file, `?` → `$1`/`%s`, `AUTOINCREMENT` → `SERIAL`, read `DATABASE_URL` — then set `"requiresDatabase": true` and redeploy. Do not copy the data already in the local file unless the user asks; they can request that later. Only if they genuinely want a throwaway database, set `"persistence": "ephemeral"` in `tamari.json` |
 | `runtime_not_detected` | Add the missing project file, then redeploy |
 | `dependency_install_failed` | Fix or commit the lockfile, then redeploy |
 | `build_script_failed` | Fix the compile errors reported, then redeploy |

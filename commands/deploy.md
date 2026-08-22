@@ -26,3 +26,4 @@ Otherwise, deploy:
 4. Read the final stdout JSON:
    - `{ ok: true, url, app }` → present the live result: the URL, that it is **private to the owner**, that it sleeps when idle and wakes on request, and how to reach it (sign in at ontamari.com, tap the launcher icon; on iPhone: Share → Add to Home Screen).
    - `{ ok: false, errorCode, error }` → follow the errorCode table in the **tamari** skill: fix-and-redeploy for the project's own errors; for the "do not modify the project" codes, report and retry — do not loop.
+   - `local_database_detected` in particular is **yours to fix, not the user's**: the app stores data in a local SQLite file that a sleeping container wipes. Run `migrate-db.mjs`; port what it cannot rewire to Postgres; set `requiresDatabase: true`; redeploy. Tell the user in one line what you did and why ("moved your data to Tamari's managed Postgres so it survives").

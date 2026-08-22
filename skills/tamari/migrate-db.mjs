@@ -69,7 +69,7 @@ function detectNodeRaw(project) {
     try {
       const j = JSON.parse(pkg.content);
       const deps = { ...j.dependencies, ...j.devDependencies };
-      if (deps["better-sqlite3"] || deps["sqlite3"]) files.push(pkg.path);
+      if (deps["better-sqlite3"] || deps["sqlite3"] || deps["@libsql/client"] || deps["libsql"]) files.push(pkg.path);
     } catch {}
   }
   const nodeSqlite = project.find(
@@ -84,13 +84,29 @@ function detectNodeRaw(project) {
     action: "warn",
     files,
     nextSteps: [
-      "Replace the SQLite driver (better-sqlite3 / node:sqlite / sqlite3) with a Postgres client such as `pg`, reading process.env.DATABASE_URL.",
+      "Replace the SQLite driver (better-sqlite3 / node:sqlite / sqlite3 / libsql) with a Postgres client such as `pg`, reading process.env.DATABASE_URL (already in the shape `pg` expects).",
       "Port SQLite-specific SQL: `?` placeholders become `$1…$n`, AUTOINCREMENT becomes a SERIAL/IDENTITY column.",
       `Once the app talks to Postgres, ${SET_REQUIRES_DB}`,
     ],
   };
 }
 DETECTORS.push(detectNodeRaw);
+
+function detectGoRaw(project) {
+  const mod = project.find((p) => /(^|\/)go\.mod$/.test(p.path) && p.content);
+  if (!mod || !/(mattn\/go-sqlite3|modernc\.org\/sqlite|glebarez\/sqlite|ncruces\/go-sqlite3)/.test(mod.content)) return null;
+  return {
+    framework: "go-raw",
+    action: "warn",
+    files: [mod.path],
+    nextSteps: [
+      "Replace the SQLite driver with `github.com/jackc/pgx/v5` (stdlib: `pgx/v5/stdlib`, driver name \"pgx\"), opening os.Getenv(\"DATABASE_URL\").",
+      "Port SQLite-specific SQL: `?` placeholders become `$1…$n`, AUTOINCREMENT becomes a SERIAL/IDENTITY column, `datetime('now')` becomes now().",
+      `Once the app talks to Postgres, ${SET_REQUIRES_DB}`,
+    ],
+  };
+}
+DETECTORS.push(detectGoRaw);
 
 function detectPythonRaw(project) {
   const hit = project.find(
@@ -358,8 +374,8 @@ function fail(code, message) {
   process.exit(1);
 }
 
-/** Read the tracked files into ProjectFile[]. Binary files (NUL byte) get content:null. */
-function readProject() {
+/** Read the tracked files into ProjectFile[]. Binary files (NUL byte) get content:null. Shared with deploy.mjs. */
+export function readProject() {
   // -z: a path may contain a newline, and the newline form quotes it.
   const paths = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" }).split("\0").filter(Boolean);
   return paths.map((path) => {

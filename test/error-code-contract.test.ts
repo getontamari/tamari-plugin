@@ -89,3 +89,18 @@ describe("every platform error code is documented", () => {
     expect(row).toMatch(/do NOT retry|cannot succeed/i);
   });
 });
+
+/** Codes this plugin raises itself, before the platform is involved. Same rule: documented or dead. */
+const PLUGIN_ERROR_CODES = ["local_database_detected", "credential_host_refused", "unreachable"] as const;
+
+describe("every plugin-raised error code is documented", () => {
+  it.each(PLUGIN_ERROR_CODES)("%s appears in the failure table", (code) => {
+    expect(skill).toContain(`\`${code}\``);
+  });
+  it("tells the agent that local_database_detected is its own job, not the user's", () => {
+    const row = skill.split("\n").find((l) => l.startsWith("| `local_database_detected`"))!;
+    expect(row).toMatch(/fix it and redeploy/i);
+    expect(row).toMatch(/port/i);
+    expect(row).toMatch(/ephemeral/);
+  });
+});

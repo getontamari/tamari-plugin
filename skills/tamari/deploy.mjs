@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cachedEmail, resolveEndpoint, unreachable } from "./login.mjs";
+import { detectPersistence, readProject } from "./migrate-db.mjs";
 
 // Endpoint and credential resolved together — the stored token is bound
 // to the default host, so a stray TAMARI_API cannot carry it off-platform.
@@ -149,6 +150,62 @@ export function withoutDeleted(trackedZ, deletedZ) {
   return Buffer.from(kept.map((p) => `${p}\0`).join(""), "utf8");
 }
 
+/**
+ * Refuse to ship data into a void. Pure — unit-tested.
+ *
+ * A container's filesystem lives exactly as long as that one instance, and a
+ * personal-class app scales to zero when idle. An app that keeps its data in
+ * a local SQLite file therefore loses everything the first time it sleeps —
+ * which is what happened to the first real app deployed with this plugin:
+ * deploy reported ✓, the user entered data, the instance was retired, the
+ * next one booted with the empty file from the image.
+ *
+ * The detection already existed in migrate-db.mjs and the skill already said
+ * "never silently ship an app that depends on a local SQLite file" — but that
+ * was a separate step the agent could skip, and it was skipped. So the deploy
+ * itself now checks. The user said "deploy this" and still gets a URL; the
+ * agent just does the migration first. `"persistence": "ephemeral"` in
+ * tamari.json is the deliberate opt-out for a scratch database.
+ *
+ * Data already in the local file is not the plugin's concern: it is not
+ * copied, not warned about, and not blocked on. If the user wants it moved,
+ * they will ask, and the agent can do that then.
+ */
+export function localDatabaseGuard(manifest, detection) {
+  if (manifest.runtime === "static") return null;
+  if (manifest.requiresDatabase === true) return null;
+  if (manifest.persistence === "ephemeral") return null;
+  const matches = detection?.matches ?? [];
+  if (matches.length === 0) return null;
+
+  const frameworks = matches.map((m) => m.framework);
+  const auto = matches.filter((m) => m.action === "auto");
+  const manual = matches.filter((m) => m.action === "warn");
+  const nextSteps = [];
+  if (auto.length > 0) {
+    nextSteps.push(
+      `Run migrate-db.mjs — it rewires ${auto.map((m) => m.framework).join(", ")} to the injected Postgres DATABASE_URL automatically and sets requiresDatabase.`,
+    );
+  }
+  for (const m of manual) {
+    nextSteps.push(`Port ${m.framework} (${m.files.join(", ")}) to Postgres yourself:`);
+    for (const step of m.nextSteps ?? []) nextSteps.push(`  - ${step}`);
+  }
+  nextSteps.push('Then set "requiresDatabase": true in tamari.json (migrate-db.mjs does this when it applies an edit) and redeploy.');
+  nextSteps.push('Only if the user genuinely wants a throwaway database: set "persistence": "ephemeral" in tamari.json to deploy as-is.');
+
+  return {
+    errorCode: "local_database_detected",
+    error:
+      `This app keeps its data in a local database file (${frameworks.join(", ")}), and "requiresDatabase" is false. ` +
+      "A container's disk is wiped every time the app sleeps, so every row the user enters would be lost. " +
+      "Not deployed. Move the app to the managed Postgres first — the steps are in nextSteps — then redeploy.",
+    frameworks,
+    files: [...new Set(matches.flatMap((m) => m.files))],
+    nextSteps,
+  };
+}
+
 /** Human-readable byte size for status detail. Pure — unit-tested. */
 export function humanBytes(n) {
   if (n < 1024) return `${n} B`;
@@ -205,6 +262,22 @@ async function main() {
     fail("no_publish_dir", `TAMARI_PUBLISH_DIR is set to "${publishDir}" but that directory does not exist. Run the build first.`);
   }
   const manifest = manifestForDeploy(JSON.parse(readFileSync("tamari.json", "utf8")), publishDir);
+
+  // Before anything leaves the machine: an app whose data would not survive
+  // its first nap is not deployed (see localDatabaseGuard).
+  if (!publishDir) {
+    let guard = null;
+    try {
+      guard = localDatabaseGuard(manifest, detectPersistence(readProject()));
+    } catch {
+      // Not a repository, or unreadable files: the upload below will say so.
+    }
+    if (guard) {
+      console.log(JSON.stringify({ ok: false, ...guard }, null, 2));
+      process.exit(1);
+    }
+  }
+
   const auth = { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" };
 
   // 1. Begin: validates the manifest and hands back a signed upload URL.
