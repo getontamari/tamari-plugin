@@ -98,6 +98,37 @@ export function cachedEmail(env, readFile) {
   }
 }
 
+/**
+ * Map a failed control-plane response to { errorCode, error }. Pure — unit-tested.
+ *
+ * The server is not uniform: deploy and billing routes carry `errorCode`,
+ * the invitations and secrets routes carry `code`, and a 401 carries neither —
+ * it is always `{ error: "not signed in" }`. Before this helper, four scripts
+ * mapped a 401 to `request_failed` or `error`, so an expired credential never
+ * produced the one code the skill knows how to act on.
+ */
+export function classifyApiFailure(status, body) {
+  const message = body?.error ?? `HTTP ${status}`;
+  if (status === 401) return { errorCode: "not_signed_in", error: "Not signed in — run /tamari:deploy login (or set TAMARI_TOKEN)." };
+  const named = body?.errorCode ?? body?.code;
+  if (named) return { errorCode: named, error: message };
+  if (status >= 500) return { errorCode: "server_error", error: `Tamari returned HTTP ${status}: ${message}. Not the project's fault — report and retry later.` };
+  return { errorCode: "request_failed", error: `${message} (HTTP ${status}).` };
+}
+
+/**
+ * The one failure every script shares: the API could not be reached at all.
+ * A thrown fetch used to end as a stack trace on stderr and nothing on stdout,
+ * so the agent — which branches on errorCode — had nothing to branch on.
+ */
+export function unreachable(api, error) {
+  return {
+    ok: false,
+    errorCode: "unreachable",
+    error: `Could not reach ${api}: ${error?.cause?.message ?? error?.message ?? String(error)}. A network problem, not an account or project problem — retry when online.`,
+  };
+}
+
 /** One poll of the token endpoint → a normalised outcome. */
 export async function pollOnce(fetchImpl, api, deviceCode) {
   const res = await fetchImpl(`${api}/api/auth/device/token`, {
@@ -213,5 +244,8 @@ async function wait() {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  await (process.argv.includes("--wait") ? wait() : start());
+  await (process.argv.includes("--wait") ? wait() : start()).catch((error) => {
+    print(unreachable(API, error));
+    process.exit(1);
+  });
 }

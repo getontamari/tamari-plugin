@@ -86,8 +86,12 @@ stash them. Do not commit on their behalf.
    · `warn` (show `nextSteps`).
 4. **Health check.** Ensure a `/healthz` route returns 200 so waking finishes before
    first paint.
-5. **Identity.** The gateway injects trusted `X-Tamari-User-*` headers (id, role,
-   email). Read them for per-user behaviour — no auth code, no login screen.
+5. **Identity.** The gateway injects trusted headers on every request:
+   `x-tamari-user-id` (always), `x-tamari-role` (`owner` | `editor` | `viewer`, always —
+   note: **not** `x-tamari-user-role`), `x-tamari-user-email` (only when the account
+   has one), and `x-tamari-app-id`. Read them for per-user behaviour — no auth code,
+   no login screen. Anything a client sends under `x-tamari-*` is stripped first, so
+   they cannot be forged.
 6. **Manifest.** Write `tamari.json`:
    ```json
    {
@@ -134,7 +138,8 @@ On `{ ok: false, errorCode }`:
 | `not_signed_in` | Sign in with the device flow above — run `login.mjs`, show the URL, then `login.mjs --wait`. Do not modify the project |
 | `credential_host_refused` | `TAMARI_API` points somewhere other than Tamari, so the stored credential was deliberately **not** sent. **Do not work around this** — do not set `TAMARI_TOKEN` to make it go away, and do not read `~/.tamari/credentials.json`. Tell the user what `TAMARI_API` is set to and where it came from: if they did not set it themselves, treat it as hostile, because that variable is how a stored full-account token gets stolen |
 | `app_unavailable` | Suspended or being deleted — **do not modify the project**; only the owner can resolve it |
-| `build_submit_failed` · `provision_failed` · `secrets_decrypt_failed` · `database_provision_failed` · `server_error` | Not the project's fault — **do not modify the project**; report and retry later |
+| `build_submit_failed` · `provision_failed` · `secrets_decrypt_failed` · `database_provision_failed` · `database_admission_denied` · `server_error` | Not the project's fault — **do not modify the project**; report and retry later. `database_admission_denied` means the platform's database connection budget is full right now; retrying later is the only fix |
+| `unreachable` | The API could not be reached at all (offline, DNS, captive portal). Not an account or project problem — **do not modify the project**; retry when online |
 | `database_not_configured` | Platform-side configuration is missing — **do not modify the project and do NOT retry**; retrying cannot succeed. Tell the user to report it to Tamari |
 
 Branch on `errorCode`, which this plugin defines — never on the wording of

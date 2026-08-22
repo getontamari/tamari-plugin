@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { resolveEndpoint } from "./login.mjs";
+import { resolveEndpoint, unreachable } from "./login.mjs";
 
 
 function out(obj) { console.log(JSON.stringify(obj, null, 2)); }
@@ -93,5 +93,8 @@ async function main() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main().catch((error) => fail("server_error", error.message));
+  main().catch((error) => {
+    out(unreachable(resolveEndpoint(process.env, readFileSync).api, error));
+    process.exit(1);
+  });
 }

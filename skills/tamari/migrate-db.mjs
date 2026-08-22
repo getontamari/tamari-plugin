@@ -44,6 +44,19 @@ export function detectPersistence(project) {
 
 const SET_REQUIRES_DB = 'set "requiresDatabase": true in tamari.json and redeploy.';
 
+/**
+ * The injected DATABASE_URL, as a Python driver can use it.
+ *
+ * The platform writes the URL for node-postgres: `postgres://…?sslmode=no-verify`.
+ * SQLAlchemy ≥ 1.4 refuses the `postgres://` scheme outright, and libpq (so
+ * psycopg, so Django) rejects `no-verify` as an unknown sslmode — either one
+ * crashes the app at startup, on the platform only, after a "successful"
+ * deploy. `require` is libpq's name for the same thing (encrypt, no CA check).
+ * Normalising in the generated code keeps the rewrite correct for both.
+ */
+export const PY_DATABASE_URL =
+  'os.environ["DATABASE_URL"].replace("postgres://", "postgresql://", 1).replace("sslmode=no-verify", "sslmode=require")';
+
 /** A `from __future__ import` statement must be the first statement in a Python file — prepending
  *  `import os` / `import dj_database_url` above one produces a SyntaxError. A module docstring
  *  above the import is fine and does not match this; only the literal future-import statement does. */
@@ -89,7 +102,7 @@ function detectPythonRaw(project) {
     action: "warn",
     files: [hit.path],
     nextSteps: [
-      "Replace the `sqlite3` module with a Postgres driver such as `psycopg`, reading os.environ['DATABASE_URL'].",
+      `Replace the \`sqlite3\` module with a Postgres driver such as \`psycopg\`, connecting to ${PY_DATABASE_URL} (the URL is written for node-postgres; psycopg needs the postgresql:// scheme and sslmode=require).`,
       "Port SQLite-specific SQL: `?` placeholders become `%s` in psycopg.",
       `Once the app talks to Postgres, ${SET_REQUIRES_DB}`,
     ],
@@ -186,7 +199,7 @@ PLANNERS.prisma = planPrismaEdits;
 
 const DJANGO_MANUAL_STEPS = [
   "Add `psycopg[binary]` and `dj-database-url` to your dependency file.",
-  'In settings.py set DATABASES["default"] = dj_database_url.config(default=os.environ["DATABASE_URL"], conn_max_age=600, ssl_require=True).',
+  `In settings.py set DATABASES["default"] = dj_database_url.config(default=${PY_DATABASE_URL}, conn_max_age=600, ssl_require=True).`,
   `Once the app talks to Postgres, ${SET_REQUIRES_DB}`,
 ];
 
@@ -209,7 +222,7 @@ DETECTORS.push(detectDjango);
 export function rewriteDjangoSettings(content) {
   const out0 = content.replace(
     /'default'\s*:\s*\{[^{}]*django\.db\.backends\.sqlite3[^{}]*\}/,
-    "'default': dj_database_url.config(default=os.environ[\"DATABASE_URL\"], conn_max_age=600, ssl_require=True)",
+    `'default': dj_database_url.config(default=${PY_DATABASE_URL}, conn_max_age=600, ssl_require=True)`,
   );
   if (out0 === content) return null;
   const header = [
@@ -250,7 +263,7 @@ PLANNERS.django = planDjangoEdits;
 const SQLA_LITERAL = /(create_engine\s*\(\s*["']sqlite:\/\/\/[^"']*["']|SQLALCHEMY_DATABASE_URI["']?\s*\]?\s*=\s*["']sqlite:\/\/\/[^"']*["'])/;
 
 const SQLA_MANUAL_NEXT_STEPS = [
-  "Point the SQLAlchemy engine/URI at os.environ['DATABASE_URL'] and add `psycopg[binary]` to your dependencies.",
+  `Point the SQLAlchemy engine/URI at ${PY_DATABASE_URL} and add \`psycopg[binary]\` to your dependencies.`,
   `Once the app talks to Postgres, ${SET_REQUIRES_DB}`,
 ];
 
@@ -295,10 +308,10 @@ DETECTORS.push(detectSqlAlchemy);
 
 export function rewriteSqlAlchemy(content) {
   let out = content
-    .replace(/create_engine\s*\(\s*["']sqlite:\/\/\/[^"']*["']/g, 'create_engine(os.environ["DATABASE_URL"]')
+    .replace(/create_engine\s*\(\s*["']sqlite:\/\/\/[^"']*["']/g, `create_engine(${PY_DATABASE_URL}`)
     .replace(
       /(SQLALCHEMY_DATABASE_URI["']?\s*\]?\s*=\s*)["']sqlite:\/\/\/[^"']*["']/g,
-      '$1os.environ["DATABASE_URL"]',
+      `$1${PY_DATABASE_URL}`,
     );
   if (out === content) return null;
   if (!/^\s*import\s+os\b/m.test(out)) out = `import os\n${out}`;
@@ -347,10 +360,8 @@ function fail(code, message) {
 
 /** Read the tracked files into ProjectFile[]. Binary files (NUL byte) get content:null. */
 function readProject() {
-  const paths = execFileSync("git", ["ls-files"], { encoding: "utf8" })
-    .trim()
-    .split("\n")
-    .filter(Boolean);
+  // -z: a path may contain a newline, and the newline form quotes it.
+  const paths = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" }).split("\0").filter(Boolean);
   return paths.map((path) => {
     let size = 0;
     let content = null;
