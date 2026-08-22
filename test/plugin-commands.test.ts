@@ -115,3 +115,21 @@ describe("skill reachability", () => {
     expect(description).toMatch(/tamari\.json|Tamari is named|deployed here/i);
   });
 });
+
+/**
+ * The sign-in link only helps if it reaches the person. Tool output does not;
+ * the agent's own text does. Both places that describe the flow have to say
+ * "relay `message` verbatim" and "end your turn" — a session where the agent
+ * ran login.mjs and --wait back-to-back showed the user nothing at all.
+ */
+describe("sign-in instructions reach the user", () => {
+  const docs = {
+    "commands/deploy.md": readFileSync("commands/deploy.md", "utf8"),
+    "skills/tamari/SKILL.md": readFileSync("skills/tamari/SKILL.md", "utf8"),
+  };
+  it.each(Object.entries(docs))("%s tells the agent to relay `message` verbatim and stop", (_f, text) => {
+    expect(text).toMatch(/`message`[^\n]*verbatim/);
+    expect(text).toMatch(/end your\s+turn/i);
+    expect(text).toMatch(/not see tool output/i);
+  });
+});
