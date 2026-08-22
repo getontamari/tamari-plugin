@@ -5,7 +5,7 @@ argument-hint: "set KEY=value | list | unset KEY"
 
 # App secrets
 
-Run `node "$CLAUDE_PLUGIN_ROOT/skills/tamari/secrets.mjs" $ARGUMENTS` from the app's directory (it reads the app id from `tamari.json`).
+Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/secrets.mjs" $ARGUMENTS` from the app's directory (it reads the app id from `tamari.json`).
 
 - `set KEY --from-file <path>` — store an encrypted secret, read from a file so the value never appears in a command. Also `--from-env <VAR>` for CI, or `--stdin` to pipe it. Keys are `A–Z`, digits and `_`; `DATABASE_URL`, `PORT` and `K_*` are reserved.
 

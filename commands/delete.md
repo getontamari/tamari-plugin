@@ -5,7 +5,7 @@ argument-hint: "<app-id>"
 
 # Delete a Tamari app
 
-Run `node "$CLAUDE_PLUGIN_ROOT/skills/tamari/delete.mjs" $ARGUMENTS` from the app's directory.
+Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/delete.mjs" $ARGUMENTS` from the app's directory.
 
 **Confirm with the user before running this.** It removes the app's running service or published files, its database and secrets, and everyone's access. It cannot be undone, and the app id is **retired** — the hostname can never be deployed to again, by them or anyone else. Say all of that, and wait for a clear yes.
 

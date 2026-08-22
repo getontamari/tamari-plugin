@@ -2,14 +2,22 @@
 // Tamari device sign-in for the skill. Two phases, because a blocking command
 // hides its own output: `login.mjs` prints the URL and exits so the agent can
 // show it; `login.mjs --wait` polls until the user approves.
+//
+// `--wait` is bounded and re-entrant rather than blocking for the code's whole
+// lifetime. An agent runs it through a shell tool with a timeout of its own
+// (two minutes by default) that shows the user nothing while it waits — so a
+// ten-minute poll reads as a hang, and when the tool kills it the agent has to
+// work out that nothing was lost. Returning `authorization_pending` after
+// WAIT_MS and asking to be run again makes every call short and every outcome
+// explicit.
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const DEFAULT_API = "https://ontamari.com";
-const API = process.env.TAMARI_API ?? DEFAULT_API;
+const API = (process.env.TAMARI_API ?? "").trim() || DEFAULT_API;
 const DIR = join(homedir(), ".tamari");
 const CREDENTIAL = join(DIR, "credentials.json");
 const PENDING = join(DIR, "pending-login.json");
@@ -104,6 +112,30 @@ export async function pollOnce(fetchImpl, api, deviceCode) {
   return { done: true, errorCode: body.error ?? "login_failed" };
 }
 
+/** How long one `--wait` call polls before handing control back. */
+export const WAIT_MS = 90 * 1000;
+
+/**
+ * Poll until approval, failure, or `budgetMs` runs out. Pure given its deps —
+ * unit-tested with a fake fetch and clock.
+ *
+ * Returns one of:
+ *   { done: true, token, email }            approved
+ *   { done: true, errorCode }               the server ended the flow
+ *   { done: false, errorCode: "authorization_pending" }   budget spent; call again
+ */
+export async function pollUntil(fetchImpl, api, deviceCode, { budgetMs, intervalMs, now = Date.now, sleep }) {
+  const deadline = now() + budgetMs;
+  let waitMs = intervalMs;
+  for (;;) {
+    const r = await pollOnce(fetchImpl, api, deviceCode);
+    if (r.done) return r;
+    waitMs = r.retryAfterMs ?? waitMs;
+    if (now() + waitMs > deadline) return { done: false, errorCode: "authorization_pending" };
+    await sleep(waitMs);
+  }
+}
+
 function print(obj) { console.log(JSON.stringify(obj, null, 2)); }
 
 async function start() {
@@ -120,22 +152,35 @@ async function start() {
 }
 
 async function wait() {
-  const { deviceCode, interval } = JSON.parse(readFileSync(PENDING, "utf8"));
-  const deadline = Date.now() + 15 * 60 * 1000;
-  let waitMs = (interval ?? 5) * 1000;
-  while (Date.now() < deadline) {
-    const r = await pollOnce(fetch, API, deviceCode);
-    if (r.done && r.token) {
-      mkdirSync(DIR, { recursive: true, mode: 0o700 });
-      // Record the email alongside the token — see cachedEmail.
-      writeFileSync(CREDENTIAL, JSON.stringify({ token: r.token, email: r.email ?? null }), { mode: 0o600 });
-      return print({ ok: true, email: r.email });
-    }
-    if (r.done) return print({ ok: false, errorCode: r.errorCode });
-    waitMs = r.retryAfterMs ?? waitMs;
-    await new Promise((res) => setTimeout(res, waitMs));
+  let pending;
+  try {
+    pending = JSON.parse(readFileSync(PENDING, "utf8"));
+  } catch {
+    return print({ ok: false, errorCode: "no_pending_login", error: "No sign-in is in progress. Run login.mjs (without --wait) first." });
   }
-  print({ ok: false, errorCode: "expired_token" });
+  const { deviceCode, interval } = pending;
+  const r = await pollUntil(fetch, API, deviceCode, {
+    budgetMs: WAIT_MS,
+    intervalMs: (interval ?? 5) * 1000,
+    sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
+  });
+  if (r.done && r.token) {
+    mkdirSync(DIR, { recursive: true, mode: 0o700 });
+    // Record the email alongside the token — see cachedEmail.
+    writeFileSync(CREDENTIAL, JSON.stringify({ token: r.token, email: r.email ?? null }), { mode: 0o600 });
+    rmSync(PENDING, { force: true });
+    return print({ ok: true, email: r.email });
+  }
+  if (r.done) {
+    // The flow is over on the server, so the device code is dead either way.
+    rmSync(PENDING, { force: true });
+    return print({ ok: false, errorCode: r.errorCode, error: "Sign-in did not complete. Run login.mjs again for a fresh code." });
+  }
+  print({
+    ok: false,
+    errorCode: "authorization_pending",
+    error: `Not approved yet after ${WAIT_MS / 1000}s. Ask the user to open the link and click Approve, then run this exact command again — nothing is lost between runs.`,
+  });
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

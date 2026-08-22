@@ -30,3 +30,19 @@ export function pollOnce(
   api: string,
   deviceCode: string,
 ): Promise<{ done: boolean; token?: string; email?: string | null; errorCode?: string; retryAfterMs?: number }>;
+
+/** How long one `--wait` call polls before returning `authorization_pending`. */
+export const WAIT_MS: number;
+
+export type PollOutcome =
+  | { done: true; token: string; email?: string | null }
+  | { done: true; errorCode: string }
+  | { done: false; errorCode: "authorization_pending" };
+
+/** Poll until approval, a terminal server answer, or the budget runs out. */
+export function pollUntil(
+  fetchImpl: typeof fetch,
+  api: string,
+  deviceCode: string,
+  opts: { budgetMs: number; intervalMs: number; now?: () => number; sleep: (ms: number) => Promise<void> },
+): Promise<PollOutcome>;
