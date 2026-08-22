@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { WAIT_MS, pollUntil } from "../skills/tamari/login.mjs";
+import { WAIT_MS, pollUntil, signInMessage } from "../skills/tamari/login.mjs";
 
 /** A fake token endpoint that answers from a script, one body per call. */
 function server(bodies: Array<{ status?: number; body: unknown }>) {
@@ -71,5 +71,26 @@ describe("pollUntil", () => {
   it("defaults to a budget an agent's shell tool will not kill", () => {
     expect(WAIT_MS).toBeGreaterThanOrEqual(30_000);
     expect(WAIT_MS).toBeLessThan(120_000);
+  });
+});
+
+// The user never sees tool output, so the link has to travel in a form the
+// agent can paste whole. A URL that only exists in the JSON is never opened.
+describe("signInMessage", () => {
+  const msg = signInMessage({ url: "https://ontamari.com/link?code=ABCD-EFGH", userCode: "ABCD-EFGH", expiresIn: 600 });
+
+  it("puts the link on its own line so every terminal makes it clickable", () => {
+    expect(msg.split("\n")).toContain("https://ontamari.com/link?code=ABCD-EFGH");
+  });
+
+  it("names the code, the Approve step, and asks the user to report back", () => {
+    expect(msg).toContain("ABCD-EFGH");
+    expect(msg).toMatch(/Approve/);
+    expect(msg).toMatch(/tell me/i);
+    expect(msg).toMatch(/10 minutes/);
+  });
+
+  it("survives a missing expiry", () => {
+    expect(signInMessage({ url: "u", userCode: "c" })).toMatch(/10 minutes/);
   });
 });

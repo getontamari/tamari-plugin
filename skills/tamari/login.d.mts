@@ -46,3 +46,6 @@ export function pollUntil(
   deviceCode: string,
   opts: { budgetMs: number; intervalMs: number; now?: () => number; sleep: (ms: number) => Promise<void> },
 ): Promise<PollOutcome>;
+
+/** The ready-to-relay sign-in instructions (markdown) carried as `message` by `login.mjs`. */
+export function signInMessage(fields: { url: string; userCode: string; expiresIn?: number }): string;

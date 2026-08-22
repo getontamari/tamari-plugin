@@ -136,6 +136,30 @@ export async function pollUntil(fetchImpl, api, deviceCode, { budgetMs, interval
   }
 }
 
+/**
+ * The block the agent relays to the user, ready to paste. Pure — unit-tested.
+ *
+ * The agent sees this script's output; the user does not. A tool result is
+ * shown to the model and, at most, a few lines of it to the person — so a URL
+ * that is only ever in the JSON is a URL nobody opens, and the sign-in waits
+ * forever for an approval the user was never asked for. Shipping the exact
+ * text removes the step where the agent decides how much of that to mention.
+ */
+export function signInMessage({ url, userCode, expiresIn }) {
+  const minutes = Math.max(1, Math.round((expiresIn ?? 600) / 60));
+  return [
+    "**Sign in to Tamari** — open this link on any device (this computer or your phone):",
+    "",
+    url,
+    "",
+    `1. Sign in, or sign up if you have no account.`,
+    `2. Check the code on the page reads **${userCode}**.`,
+    `3. Click **Approve**, then tell me you have done so.`,
+    "",
+    `The code expires in ${minutes} minutes.`,
+  ].join("\n");
+}
+
 function print(obj) { console.log(JSON.stringify(obj, null, 2)); }
 
 async function start() {
@@ -148,7 +172,12 @@ async function start() {
   if (!res.ok) return print({ ok: false, errorCode: body.error ?? "start_failed" });
   mkdirSync(DIR, { recursive: true, mode: 0o700 });
   writeFileSync(PENDING, JSON.stringify({ deviceCode: body.deviceCode, interval: body.interval }), { mode: 0o600 });
-  print({ url: body.verificationUriComplete, userCode: body.userCode, expiresIn: body.expiresIn });
+  const fields = { url: body.verificationUriComplete, userCode: body.userCode, expiresIn: body.expiresIn };
+  const message = signInMessage(fields);
+  // Also on stderr, unformatted, for a person running this by hand: the JSON
+  // on stdout is for the agent.
+  process.stderr.write(`\n${message.replace(/\*\*/g, "")}\n\n`);
+  print({ ...fields, message });
 }
 
 async function wait() {

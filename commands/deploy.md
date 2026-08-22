@@ -6,8 +6,10 @@ argument-hint: "[login]"
 # Deploy to Tamari
 
 If `$ARGUMENTS` begins with `login`:
-1. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs"`. Show the user the `url` (a clickable link) and the `userCode`; ask them to open it, sign in or sign up, confirm the code matches, and click **Approve**.
-2. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs" --wait`. It polls for up to 90 seconds. On `{ ok: true, email }` report the signed-in email and stop. On `{ ok: false, errorCode: "authorization_pending" }` the user has not approved yet: tell them, and run the same `--wait` command again — repeat until approved. On `expired_token` or `access_denied`, start over from step 1.
+1. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs"`. It prints `{ url, userCode, expiresIn, message }`.
+2. **Put the `message` field in your reply, verbatim, as its own paragraph.** It is markdown: the link on its own line, the code, and the three steps. The user does not see tool output — if the link is not in *your* text, they have nothing to click and the sign-in never completes. Do not summarise it, do not bury it under other text.
+3. **End your turn here.** Do not run `--wait` in the same turn: approval needs a human with a browser, and they cannot act while you are still working. Wait for them to say they have approved (or to ask you to check).
+4. Then run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs" --wait`. It polls for up to 90 seconds. On `{ ok: true, email }` report the signed-in email and stop. On `{ ok: false, errorCode: "authorization_pending" }` they have not approved yet: show the link again and ask them to approve, then run the same `--wait` command again. On `expired_token` or `access_denied`, start over from step 1.
 
 Otherwise, deploy:
 1. Ensure a `tamari.json` exists. If it is missing, use the **tamari** skill to create it (detect the runtime, derive the app id from the directory name).

@@ -42,14 +42,18 @@ command. Then agree the plan: they build, you wire the deployment contract as yo
 If a deploy returns `not_signed_in`, sign in with the device flow — no token to
 copy, and sign-up happens inline on first use:
 
-1. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs"`. It prints `{ url, userCode }`.
-2. Show the user the `url` (a clickable link) and the `userCode`; ask them to open
-   it, sign in or sign up, check the code matches, and click **Approve**.
-3. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs" --wait`. It polls for
-   up to 90 seconds. On `{ ok: true, email }` the credential is saved to
+1. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs"`. It prints
+   `{ url, userCode, expiresIn, message }`.
+2. **Put `message` in your reply verbatim, as its own paragraph, then end your
+   turn.** The user does not see tool output; the link has to be in your text or
+   there is nothing for them to click. Approval needs a human with a browser, so
+   do not run `--wait` in the same turn — wait for them to say they have approved.
+3. Then run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/login.mjs" --wait`. It polls
+   for up to 90 seconds. On `{ ok: true, email }` the credential is saved to
    `~/.tamari/credentials.json`. On `{ ok: false, errorCode: "authorization_pending" }`
-   they have not approved yet — run the same `--wait` command again (as many times
-   as needed; nothing is lost between runs). On `expired_token` start over from step 1.
+   they have not approved yet — show the link again, ask them to approve, and run
+   the same `--wait` command again (nothing is lost between runs). On
+   `expired_token` or `access_denied` start over from step 1.
 4. Redeploy.
 
 `TAMARI_TOKEN` still works as an override (CI) and takes precedence.
