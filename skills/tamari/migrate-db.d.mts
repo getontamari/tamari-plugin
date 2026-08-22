@@ -41,3 +41,6 @@ export function classifyDiskFailure(
 
 /** The injected DATABASE_URL normalised for Python drivers (postgresql:// scheme, sslmode=require). */
 export const PY_DATABASE_URL: string;
+
+/** The tracked files as ProjectFile[] (content null for binaries). Disk glue shared with deploy.mjs. */
+export function readProject(): ProjectFile[];

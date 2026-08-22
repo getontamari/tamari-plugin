@@ -50,3 +50,9 @@ export function stageEvents(prev: string, next: string, runtime: string): StageE
 
 /** Tracked files (NUL-delimited) minus those deleted from the working tree. */
 export function withoutDeleted(trackedZ: Buffer, deletedZ: Buffer): Buffer;
+
+/** The refusal for an app whose data lives in a local database file, or null when it may deploy. */
+export function localDatabaseGuard(
+  manifest: { runtime?: string; requiresDatabase?: boolean; persistence?: string; [key: string]: unknown },
+  detection: { matches: Array<{ framework: string; action: "auto" | "warn"; files: string[]; nextSteps?: string[] }>; [key: string]: unknown } | null | undefined,
+): { errorCode: "local_database_detected"; error: string; frameworks: string[]; files: string[]; nextSteps: string[] } | null;

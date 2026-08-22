@@ -1,7 +1,7 @@
 {
   "name": "tamari",
   "description": "Deploy the current project to Tamari \u2014 a private HTTPS URL on your phone.",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "author": {
     "name": "Tamari"
   },
