@@ -129,6 +129,7 @@ On `{ ok: false, errorCode }`:
 | `dependency_install_failed` | Fix or commit the lockfile, then redeploy |
 | `build_script_failed` | Fix the compile errors reported, then redeploy |
 | `build_timeout` | Reduce dependencies or build steps |
+| `build_failed` | The build failed in a way the platform could not classify, so the message is all there is — read it rather than guessing. If it names something in the project, fix that and redeploy. If it does not, say so and stop: this is the one build code that may not be the project's fault, and guessing at it is how an agent ends up rewriting files that were never wrong |
 | `static_publish_failed` | Fix what the message names (e.g. add an `index.html`), then redeploy |
 | `revision_failed` | Your app crashed (or never listened on `PORT`) at startup — the message carries Cloud Run's reason. Fix the app's startup path locally, verify it binds `process.env.PORT`, then redeploy |
 | `app_id_unavailable` · `app_id_impersonation` | Choose a different `app` in `tamari.json` |
