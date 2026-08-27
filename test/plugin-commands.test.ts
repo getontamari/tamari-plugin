@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const CMD_DIR = "commands";
@@ -80,6 +81,20 @@ describe("skill reachability", () => {
     expect(withScripts.length).toBeGreaterThan(3);
     for (const c of withScripts) {
       for (const line of c.match(/node "[^"]+"/g) ?? []) expect(line).toContain(ROOT);
+    }
+  });
+
+  it("maps every Claude script command to a real Codex target beside SKILL.md", () => {
+    expect(skill).toMatch(/\*\*Codex:\*\*[\s\S]*absolute source path/);
+    expect(skill).toMatch(/replace the literal[\s\S]*\$\{CLAUDE_PLUGIN_ROOT\}\/skills\/tamari/);
+
+    const skillDir = dirname(resolve("skills/tamari/SKILL.md"));
+    const commands = [
+      ...skill.matchAll(/node "\$\{CLAUDE_PLUGIN_ROOT\}\/skills\/tamari\/([^" ]+\.mjs)"/g),
+    ];
+    expect(commands.length).toBeGreaterThanOrEqual(scripts.length);
+    for (const [, script] of commands) {
+      expect(existsSync(join(skillDir, script)), script).toBe(true);
     }
   });
 

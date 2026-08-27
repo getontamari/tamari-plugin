@@ -1,0 +1,35 @@
+{
+  "name": "tamari",
+  "description": "Deploy the current project to Tamari — a private HTTPS URL on your phone.",
+  "version": "0.15.0",
+  "author": {
+    "name": "Tamari"
+  },
+  "homepage": "https://ontamari.com",
+  "repository": "https://github.com/ontamari/tamari-plugin",
+  "license": "MIT",
+  "keywords": [
+    "deploy",
+    "hosting",
+    "claude-code",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Tamari",
+    "shortDescription": "Deploy a private web app to your phone",
+    "longDescription": "Deploy and manage the current web project on Tamari with private-by-default access, sharing, secrets, and account status.",
+    "developerName": "Tamari",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Write"
+    ],
+    "websiteURL": "https://ontamari.com",
+    "defaultPrompt": [
+      "Deploy this project with Tamari.",
+      "Show my Tamari apps and plan status.",
+      "Share this Tamari app with someone."
+    ],
+    "brandColor": "#A35C3D"
+  }
+}

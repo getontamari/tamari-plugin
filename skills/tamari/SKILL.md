@@ -24,10 +24,17 @@ user should not have to think about containers, DNS, or cloud configuration.
 
 ## Where the scripts live
 
-Every command below runs a script that ships with this plugin, at
-`${CLAUDE_PLUGIN_ROOT}/skills/tamari/`. Claude Code fills in that path before you
-read this, so the commands below can be run exactly as written — do not search
-for the directory or rewrite the path.
+Every command below runs a script that ships with this plugin.
+
+- **Claude Code:** `${CLAUDE_PLUGIN_ROOT}/skills/tamari/` is filled in before
+  you read this. Run the commands below exactly as written; do not search for
+  the directory or rewrite the path.
+- **Codex:** the skill catalog gives you the absolute source path of this
+  `SKILL.md`. Before running a command below, replace the literal
+  `${CLAUDE_PLUGIN_ROOT}/skills/tamari` prefix with the absolute directory that
+  contains this file. Keep the shell working directory in the user's app. Do
+  not expect `CLAUDE_PLUGIN_ROOT` or `CODEX_PLUGIN_ROOT` to be set, and do not
+  guess or search plugin cache paths.
 
 ## Start (priming)
 
