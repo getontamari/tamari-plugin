@@ -46,10 +46,10 @@ and the case gets written down rather than quietly resolved.
 
 ## Bump `version` on every change
 
-`.claude-plugin/plugin.json`'s `version` is the cache key for every installed
-user (`~/.claude/plugins/cache/…/<version>/`). Ship a change without bumping it
-and `/plugin install` serves the stale copy — nobody gets the update, including
-security fixes, and nothing reports an error.
+Keep `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` on the same
+version. The version is the cache key for installed copies. Ship a change
+without bumping it and an install can serve stale code — nobody gets the
+update, including security fixes, and nothing reports an error.
 
-`version` lives in `plugin.json` **only**. The marketplace manifest must not
-set it: a stale value there silently masks the real one.
+`version` lives in each host's `plugin.json` **only**. The marketplace manifest
+must not set it: a stale value there silently masks the real one.

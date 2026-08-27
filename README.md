@@ -1,12 +1,24 @@
-# Tamari for Claude Code
+# Tamari for Claude Code and Codex
 
 Deploy the project you are working on to a private HTTPS URL you open on your
 phone. One command, no containers, no DNS, no cloud console.
 
-```
+### Claude Code
+
+```text
 /plugin marketplace add ontamari/tamari-plugin
 /plugin install tamari@tamari
 ```
+
+### Codex
+
+```sh
+codex plugin marketplace add ontamari/tamari-plugin
+codex plugin add tamari@tamari
+```
+
+Start a new Codex conversation after installation so the Tamari skill is
+available from the beginning of the session.
 
 Then, in any project, just say what you want:
 
@@ -25,15 +37,16 @@ Then, in any project, just say what you want:
 - **Holds your secrets** encrypted, injected as environment variables at deploy
   time, never in the committed manifest.
 
-You mostly will not type these — the agent runs them when you describe what you
-want — but they exist: `/tamari:deploy`, `/tamari:status`, `/tamari:share`,
-`/tamari:secrets`, `/tamari:delete`, `/tamari:start`.
+Plain-language requests work in both hosts. Claude Code also exposes these
+optional slash commands: `/tamari:deploy`, `/tamari:status`, `/tamari:share`,
+`/tamari:secrets`, `/tamari:delete`, `/tamari:start`. Codex invokes the same
+workflows through the Tamari skill rather than those aliases.
 
 ## What it needs
 
-Claude Code, `git`, and `node`. Your project must be a git repository — only
-tracked files are uploaded, which is what keeps `node_modules` and a stray
-`.env` out of the build.
+Claude Code or Codex, plus `git` and `node`. Your project must be a git
+repository — only tracked files are uploaded, which is what keeps
+`node_modules` and a stray `.env` out of the build.
 
 ## Where the code runs
 
