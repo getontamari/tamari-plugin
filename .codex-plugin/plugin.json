@@ -1,12 +1,12 @@
 {
   "name": "tamari",
   "description": "Deploy the current project to Tamari — a private HTTPS URL on your phone.",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "author": {
     "name": "Tamari"
   },
   "homepage": "https://ontamari.com",
-  "repository": "https://github.com/ontamari/tamari-plugin",
+  "repository": "https://github.com/getontamari/tamari-plugin",
   "license": "MIT",
   "keywords": [
     "deploy",

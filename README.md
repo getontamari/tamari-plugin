@@ -6,14 +6,14 @@ phone. One command, no containers, no DNS, no cloud console.
 ### Claude Code
 
 ```text
-/plugin marketplace add ontamari/tamari-plugin
+/plugin marketplace add getontamari/tamari-plugin
 /plugin install tamari@tamari
 ```
 
 ### Codex
 
 ```sh
-codex plugin marketplace add ontamari/tamari-plugin
+codex plugin marketplace add getontamari/tamari-plugin
 codex plugin add tamari@tamari
 ```
 
