@@ -56,3 +56,33 @@ export function localDatabaseGuard(
   manifest: { runtime?: string; requiresDatabase?: boolean; persistence?: string; [key: string]: unknown },
   detection: { matches: Array<{ framework: string; action: "auto" | "warn"; files: string[]; nextSteps?: string[] }>; [key: string]: unknown } | null | undefined,
 ): { errorCode: "local_database_detected"; error: string; frameworks: string[]; files: string[]; nextSteps: string[] } | null;
+
+/**
+ * Refuse to ship an npm lockfile that cannot install on the linux-x64 builder
+ * (npm/cli#4828: a lockfile grown incrementally on another platform records no
+ * Linux native optional packages). `fail` refuses the deploy — build-platform
+ * names are missing; `note` is advisory — the gaps are on platforms this build
+ * does not run; null means healthy, v1, or not an npm lockfile at all.
+ */
+export function lockfilePlatformPreflight(
+  lock:
+    | {
+        lockfileVersion?: number;
+        packages?: Record<string, { optionalDependencies?: Record<string, string>; [key: string]: unknown }>;
+        [key: string]: unknown;
+      }
+    | null
+    | undefined,
+  lockfileName?: string,
+):
+  | {
+      fail: {
+        errorCode: "lockfile_platform_mismatch";
+        error: string;
+        missing: string[];
+        alsoMissingOtherPlatforms?: string[];
+        nextSteps: string[];
+      };
+    }
+  | { note: string }
+  | null;

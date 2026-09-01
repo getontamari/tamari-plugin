@@ -31,6 +31,7 @@ const PLATFORM_ERROR_CODES = [
   "dependency_install_failed",
   "entitlement_required",
   "invalid_manifest",
+  "lockfile_platform_mismatch",
   "revision_failed",
   "runtime_not_detected",
   "static_publish_failed",
@@ -87,6 +88,20 @@ describe("every platform error code is documented", () => {
   it("tells the agent not to retry what cannot succeed", () => {
     const row = skill.split("\n").find((l) => l.includes("`database_not_configured`"));
     expect(row).toMatch(/do NOT retry|cannot succeed/i);
+  });
+
+  /**
+   * The one build failure the plugin can also catch itself, before upload
+   * (deploy.mjs raises the same code from its lockfile preflight). The row has
+   * to carry the regeneration steps — the code exists so an agent can fix and
+   * redeploy without a human.
+   */
+  it("gives lockfile_platform_mismatch the regeneration steps, not just a name", () => {
+    const row = skill.split("\n").find((l) => l.includes("`lockfile_platform_mismatch`"));
+    expect(row).toBeDefined();
+    expect(row).toMatch(/before upload/i);
+    expect(row).toMatch(/npm install/);
+    expect(row).toMatch(/redeploy/);
   });
 });
 

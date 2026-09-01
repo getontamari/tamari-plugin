@@ -206,6 +206,84 @@ export function localDatabaseGuard(manifest, detection) {
   };
 }
 
+/**
+ * Refuse to ship an npm lockfile the builder cannot install. Pure — unit-tested.
+ *
+ * npm records a native package's platform variants as `optionalDependencies`
+ * and installs the matching one. A long-standing npm bug (npm/cli#4828) makes
+ * an incremental `npm install` — node_modules already present — record only
+ * the current platform's variant in package-lock.json. Apps are scaffolded on
+ * ARM Macs; the builder is linux-x64 and installs strictly from the lockfile
+ * (`npm ci`), so the Linux binary never lands and the build dies the first
+ * time it is required — a ~90-second cloud round trip to learn what this check
+ * says before anything leaves the machine. The platform classifies that same
+ * build failure under the same code; the remediation is identical either way.
+ *
+ * The check: every name any entry declares in `optionalDependencies` must be
+ * recorded somewhere in the `packages` map. A healthy lockfile records every
+ * variant and lets `npm ci` skip the foreign ones, so a declared name with no
+ * entry can never install anywhere. Missing Linux x64 names refuse the deploy;
+ * gaps for other platforms only get a note — this build does not need them,
+ * but a collaborator's `npm ci` on one of those platforms will.
+ *
+ * By global name, not resolution position: a nested copy pinned to one
+ * platform whose variants are recorded only on another copy's path would slip
+ * through. That narrower shape has not failed a real build; this catches the
+ * class that has.
+ */
+export function lockfilePlatformPreflight(lock, lockfileName = "package-lock.json") {
+  const packages = lock?.packages;
+  if (!packages || typeof packages !== "object") return null; // v1, or not an npm lockfile
+  const recorded = new Set();
+  for (const key of Object.keys(packages)) {
+    const at = key.lastIndexOf("node_modules/");
+    if (at !== -1) recorded.add(key.slice(at + "node_modules/".length));
+  }
+  const missing = new Set();
+  for (const entry of Object.values(packages)) {
+    for (const name of Object.keys(entry?.optionalDependencies ?? {})) {
+      if (!recorded.has(name)) missing.add(name);
+    }
+  }
+  if (missing.size === 0) return null;
+
+  // The builder: linux, x64, glibc. Naming varies by family — `-linux-x64-gnu`
+  // (napi-rs), `-linux-x64` (esbuild, sharp), `-linux-64` (workerd),
+  // `-linux-x64-glibc` (parcel) — and `linux-arm64` must not match.
+  const buildPlatform = (name) => /linux[-_](x64|amd64|64)([-_](gnu|musl|glibc))?$/.test(name);
+  const failing = [...missing].filter(buildPlatform).sort();
+  const other = [...missing].filter((n) => !buildPlatform(n)).sort();
+
+  if (failing.length === 0) {
+    const sample = other.slice(0, 6).join(", ") + (other.length > 6 ? ` and ${other.length - 6} more` : "");
+    return {
+      note:
+        `${lockfileName} declares optional platform packages it never records (${sample}). ` +
+        "This Linux x64 build does not need them, but an install on those platforms will fail — " +
+        `regenerating the lockfile (delete node_modules and ${lockfileName}, run \`npm install\`, commit) closes the gap.`,
+    };
+  }
+  return {
+    fail: {
+      errorCode: "lockfile_platform_mismatch",
+      error:
+        `Your ${lockfileName} was generated on another platform and is missing Linux native packages ` +
+        "(npm optional-dependencies bug, npm/cli#4828). Not uploaded: the builder installs strictly from " +
+        `this lockfile, so the build would fail on the first missing binary. Delete node_modules (including ` +
+        `any workspace node_modules) and ${lockfileName}, run \`npm install\`, commit the regenerated ` +
+        "lockfile, and redeploy.",
+      missing: failing,
+      ...(other.length > 0 ? { alsoMissingOtherPlatforms: other } : {}),
+      nextSteps: [
+        `Delete node_modules — every workspace's too — and ${lockfileName}.`,
+        "Run `npm install` on any platform; a full resolve records every platform's packages.",
+        `Check the regenerated ${lockfileName} has entries for: ${failing.join(", ")}.`,
+        "Commit the lockfile and redeploy.",
+      ],
+    },
+  };
+}
+
 /** Human-readable byte size for status detail. Pure — unit-tested. */
 export function humanBytes(n) {
   if (n < 1024) return `${n} B`;
@@ -275,6 +353,32 @@ async function main() {
     if (guard) {
       console.log(JSON.stringify({ ok: false, ...guard }, null, 2));
       process.exit(1);
+    }
+  }
+
+  // Same doctrine, different defect: a node build installs exactly what the
+  // committed npm lockfile records, and a lockfile grown incrementally on a
+  // mac records no Linux natives (npm/cli#4828). Milliseconds here beat ~90
+  // seconds of cloud build arriving at the same message (see
+  // lockfilePlatformPreflight). Only the tracked lockfile counts — an ignored
+  // one never reaches the builder.
+  if (!publishDir && manifest.runtime === "node") {
+    let preflight = null;
+    try {
+      const tracked = execFileSync("git", ["ls-files", "-z", "--", "npm-shrinkwrap.json", "package-lock.json"])
+        .toString("utf8").split("\0").filter(Boolean);
+      // npm prefers the shrinkwrap when both ship.
+      const lockfile = ["npm-shrinkwrap.json", "package-lock.json"].find((f) => tracked.includes(f));
+      if (lockfile) preflight = lockfilePlatformPreflight(JSON.parse(readFileSync(lockfile, "utf8")), lockfile);
+    } catch {
+      // Not a repository, or an unparseable lockfile: the build will say so with more authority.
+    }
+    if (preflight?.fail) {
+      console.log(JSON.stringify({ ok: false, ...preflight.fail }, null, 2));
+      process.exit(1);
+    }
+    if (preflight?.note) {
+      process.stderr.write(JSON.stringify({ t: "note", note: preflight.note }) + "\n");
     }
   }
 
