@@ -121,11 +121,13 @@ stash them. Do not commit on their behalf.
 ## Deploy
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/deploy.mjs"` (or, for a static export,
-prefix `TAMARI_PUBLISH_DIR=out`). It streams NDJSON stage events on stderr — one per
-real stage (`upload`, `build`, `provision`/`publish`, `live`) — and prints the final
-result as JSON on stdout. Render the events as a ticking `✓` checklist with the
-elapsed time each event reports; render only what is emitted, never an invented
-stage or timing. On success, give the user the URL and say it is private to their
+prefix `TAMARI_PUBLISH_DIR=out`). It streams NDJSON events on stderr: one
+`{ "t": "stage" }` line per real stage (`upload`, `build`, `provision`/`publish`,
+`live`), and occasionally a `{ "t": "note" }` line — advisory, not a stage; relay
+its `note` to the user in one line and continue. The final result is JSON on
+stdout. Render the stage events as a ticking `✓` checklist with the elapsed time
+each event reports; render only what is emitted, never an invented stage or
+timing. On success, give the user the URL and say it is private to their
 account; on failure, use the table below.
 
 ## Failure handling
@@ -138,6 +140,7 @@ On `{ ok: false, errorCode }`:
 | `local_database_detected` | Refused **before upload**, by this plugin: the app keeps its data in a local database file (SQLite) and `requiresDatabase` is false, so every row would vanish the first time the app sleeps. The user asked you to deploy; do not hand this back to them as an error — **fix it and redeploy**. Run `migrate-db.mjs`: where it reports `auto` it has already rewired the framework and set `requiresDatabase`; where it reports `warn` (raw `sqlite3`, `better-sqlite3`, Drizzle, Knex, Go drivers…) **port the data layer to Postgres yourself** using its `nextSteps` — usually one file, `?` → `$1`/`%s`, `AUTOINCREMENT` → `SERIAL`, read `DATABASE_URL` — then set `"requiresDatabase": true` and redeploy. Do not copy the data already in the local file unless the user asks; they can request that later. Only if they genuinely want a throwaway database, set `"persistence": "ephemeral"` in `tamari.json` |
 | `runtime_not_detected` | Add the missing project file, then redeploy |
 | `dependency_install_failed` | Fix or commit the lockfile, then redeploy |
+| `lockfile_platform_mismatch` | `package-lock.json` was generated on another platform (typically an ARM Mac) and never recorded the Linux native packages the builder installs — a known npm optional-dependencies bug (npm/cli#4828). This plugin refuses **before upload** when it can see the gap (`missing` names the packages); the platform sends the same code when a build hits it. Yours to fix, not the user's: delete `node_modules` (every workspace's too) and `package-lock.json`, run `npm install`, check the regenerated lockfile records the `missing` names, commit it, and redeploy. Do not retry without regenerating — the same lockfile can only fail the same way |
 | `build_script_failed` | Fix the compile errors reported, then redeploy |
 | `build_timeout` | Reduce dependencies or build steps |
 | `build_failed` | The build failed in a way the platform could not classify, so the message is all there is — read it rather than guessing. If it names something in the project, fix that and redeploy. If it does not, say so and stop: this is the one build code that may not be the project's fault, and guessing at it is how an agent ends up rewriting files that were never wrong |
