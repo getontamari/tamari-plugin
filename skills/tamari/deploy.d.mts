@@ -86,3 +86,14 @@ export function lockfilePlatformPreflight(
     }
   | { note: string }
   | null;
+
+/**
+ * The refusal for an archive over the platform's upload limit, or null when it
+ * may upload (within the limit, or no limit named). `kind` chooses the fix:
+ * git-tracked files, or a static publish directory.
+ */
+export function archiveTooLarge(
+  bytes: number,
+  limit: number | undefined | null,
+  kind: "tracked" | "publishDir",
+): { errorCode: "source_too_large"; error: string; bytes: number; limit: number; nextSteps: string[] } | null;

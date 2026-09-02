@@ -106,11 +106,22 @@ describe("every platform error code is documented", () => {
 });
 
 /** Codes this plugin raises itself, before the platform is involved. Same rule: documented or dead. */
-const PLUGIN_ERROR_CODES = ["local_database_detected", "credential_host_refused", "unreachable"] as const;
+const PLUGIN_ERROR_CODES = [
+  "local_database_detected",
+  "credential_host_refused",
+  "unreachable",
+  "source_too_large",
+] as const;
 
 describe("every plugin-raised error code is documented", () => {
   it.each(PLUGIN_ERROR_CODES)("%s appears in the failure table", (code) => {
     expect(skill).toContain(`\`${code}\``);
+  });
+  it("gives source_too_large the untracking steps, before upload", () => {
+    const row = skill.split("\n").find((l) => l.startsWith("| `source_too_large`"))!;
+    expect(row).toMatch(/before upload/i);
+    expect(row).toMatch(/\.gitignore/);
+    expect(row).toMatch(/redeploy/);
   });
   it("tells the agent that local_database_detected is its own job, not the user's", () => {
     const row = skill.split("\n").find((l) => l.startsWith("| `local_database_detected`"))!;
