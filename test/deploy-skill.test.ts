@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { classifyFailure, manifestForDeploy, tarArgs, stageEvents, humanBytes, withoutDeleted } from "../skills/tamari/deploy.mjs";
+import { classifyFailure, manifestForDeploy, tarArgs, tarEnv, stageEvents, humanBytes, withoutDeleted } from "../skills/tamari/deploy.mjs";
 import { resolveToken } from "../skills/tamari/login.mjs";
 import { parseSecretsArgs, readSecretValue } from "../skills/tamari/secrets.mjs";
 
@@ -108,7 +108,21 @@ describe("static-export publish path (TAMARI_PUBLISH_DIR)", () => {
   });
 
   it("tars the publish dir's contents when it is set", () => {
-    expect(tarArgs("out", "/tmp/x/source.tgz")).toEqual(["-czf", "/tmp/x/source.tgz", "-C", "out", "."]);
+    expect(tarArgs("out", "/tmp/x/source.tgz")).toEqual(["-czf", "/tmp/x/source.tgz", "--no-xattrs", "-C", "out", "."]);
+  });
+
+  /**
+   * Every file a Mac has touched carries `com.apple.provenance`, and tar
+   * records it as a pax header beside the entry — invisible to `tar -t`, so
+   * an archive checked entry-by-entry looks clean. An extractor that cannot
+   * store the attribute writes it as a `._name` AppleDouble sidecar instead,
+   * and `._001_init.sql` was read as SQL by a deployed app. Strip at source.
+   */
+  it("keeps macOS extended attributes out of the archive, with a retry shape for a tar that lacks the flag", () => {
+    expect(tarArgs(null, "/tmp/x/source.tgz")).toContain("--no-xattrs");
+    expect(tarArgs("out", "/tmp/x/source.tgz")).toContain("--no-xattrs");
+    expect(tarArgs(null, "/tmp/x/source.tgz", { xattrs: true })).not.toContain("--no-xattrs");
+    expect(tarEnv({ PATH: "/bin" })).toEqual({ PATH: "/bin", COPYFILE_DISABLE: "1" });
   });
 
   /**
@@ -126,10 +140,10 @@ describe("static-export publish path (TAMARI_PUBLISH_DIR)", () => {
    */
   it("never puts a tracked filename in argv — names come from stdin", () => {
     const args = tarArgs(null, "/tmp/x/source.tgz");
-    expect(args).toEqual(["-czf", "/tmp/x/source.tgz", "--null", "-T", "-"]);
+    expect(args).toEqual(["-czf", "/tmp/x/source.tgz", "--no-xattrs", "--null", "-T", "-"]);
     expect(args).not.toContain("a.js");
-    // The hostile case: nothing here can be read as an option by tar.
-    expect(args.filter((a) => a.startsWith("--"))).toEqual(["--null"]);
+    // The hostile case: every long option here is ours; none came from a filename.
+    expect(args.filter((a) => a.startsWith("--"))).toEqual(["--no-xattrs", "--null"]);
   });
 
   // The archive path is passed in rather than fixed at /tmp/tamari-source.tgz

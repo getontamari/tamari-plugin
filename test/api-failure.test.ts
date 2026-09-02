@@ -64,6 +64,7 @@ describe("a network failure reaches stdout as JSON", () => {
     ["redeem.mjs", ["code"]],
     ["subscribe.mjs", []],
     ["login.mjs", []],
+    ["logs.mjs", []],
   ])("%s", (script, args) => {
     const r = spawnSync(process.execPath, [join(scripts, script), ...args], { cwd: dir, env, encoding: "utf8", timeout: 20_000 });
     let parsed: { ok?: boolean; errorCode?: string } = {};

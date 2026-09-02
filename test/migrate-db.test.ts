@@ -53,6 +53,7 @@ describe("detectPersistence + buildReport: none", () => {
       warnings: [],
       requiresDatabaseSet: false,
       dataAtRisk: [],
+      localWrites: [],
       nextSteps: [],
     });
   });

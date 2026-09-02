@@ -111,6 +111,8 @@ const PLUGIN_ERROR_CODES = [
   "credential_host_refused",
   "unreachable",
   "source_too_large",
+  "app_not_found",
+  "logs_unavailable",
 ] as const;
 
 describe("every plugin-raised error code is documented", () => {
