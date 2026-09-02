@@ -284,6 +284,45 @@ export function lockfilePlatformPreflight(lock, lockfileName = "package-lock.jso
   };
 }
 
+/**
+ * Refuse an archive the platform would reject on arrival. Pure — unit-tested.
+ *
+ * The begin response names the upload limit, and storage enforces it with a
+ * signed header this client sends back. Checking the archive here first turns
+ * storage's bare 400 into the cause and the fix: only git-tracked files are
+ * packaged (or the export directory, for a static publish), so an archive
+ * over the limit means something large is tracked by mistake — build output,
+ * media, vendored dependencies. No limit named means nothing to check.
+ */
+export function archiveTooLarge(bytes, limit, kind) {
+  if (!Number.isFinite(limit) || limit <= 0 || bytes <= limit) return null;
+  const mib = (n) => Math.ceil(n / (1024 * 1024));
+  const tracked = kind !== "publishDir";
+  return {
+    errorCode: "source_too_large",
+    error:
+      `The source archive is ${mib(bytes)} MiB; the limit is ${mib(limit)} MiB. Not uploaded. ` +
+      (tracked
+        ? "Only git-tracked files are packaged, so something large is tracked by mistake — build output, " +
+          "media, or vendored dependencies. Untrack it (add it to .gitignore, then `git rm -r --cached`), commit, and redeploy."
+        : "The export directory is packaged as-is, so it holds something large — media or generated files. " +
+          "Remove them from the export (or exclude them from the build), rebuild, and redeploy."),
+    bytes,
+    limit,
+    nextSteps: tracked
+      ? [
+          "Find what is large: `git ls-files -z | xargs -0 du -k | sort -n | tail`.",
+          "Untrack build output, media and vendored dependencies: add them to .gitignore and `git rm -r --cached <path>`.",
+          "Commit and redeploy.",
+        ]
+      : [
+          "Find what is large in the export directory: `du -ak <dir> | sort -n | tail`.",
+          "Remove large media or generated files from the export, or exclude them from the build.",
+          "Rebuild and redeploy.",
+        ],
+  };
+}
+
 /** Human-readable byte size for status detail. Pure — unit-tested. */
 export function humanBytes(n) {
   if (n < 1024) return `${n} B`;
@@ -385,10 +424,12 @@ async function main() {
   const auth = { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" };
 
   // 1. Begin: validates the manifest and hands back a signed upload URL.
+  //    `uploadLimit` says this client will send the size header the platform
+  //    signs into that URL, so storage refuses an oversized upload outright.
   const begun = await fetch(`${API}/api/deploy`, {
     method: "POST",
     headers: auth,
-    body: JSON.stringify({ manifest }),
+    body: JSON.stringify({ manifest, uploadLimit: true }),
   });
   const beginBody = await safeJson(begun);
   if (!begun.ok) {
@@ -411,11 +452,22 @@ async function main() {
     execFileSync("tar", tarArgs(null, ARCHIVE), { input: tracked });
   }
 
+  // Over the platform's limit: say why here, before the upload storage
+  // would refuse with a bare 400 (see archiveTooLarge).
+  const tooLarge = archiveTooLarge(statSync(ARCHIVE).size, beginBody.uploadLimitBytes, publishDir ? "publishDir" : "tracked");
+  if (tooLarge) {
+    console.log(JSON.stringify({ ok: false, ...tooLarge }, null, 2));
+    process.exit(1);
+  }
+
   const uploadStart = Date.now();
   emitStage({ stage: "upload", status: "start" });
+  // `uploadHeaders` are the headers the platform signed into the URL — the
+  // size limit today. Storage rejects the PUT if a signed header is missing,
+  // so they are sent back exactly as given.
   const uploaded = await fetch(beginBody.uploadUrl, {
     method: "PUT",
-    headers: { "content-type": "application/gzip" },
+    headers: { "content-type": "application/gzip", ...(beginBody.uploadHeaders ?? {}) },
     body: readFileSync(ARCHIVE),
   });
   if (!uploaded.ok) {
