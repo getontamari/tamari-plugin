@@ -14,17 +14,21 @@ If `$ARGUMENTS` begins with `login`:
 Otherwise, deploy:
 1. Ensure a `tamari.json` exists. If it is missing, use the **tamari** skill to create it (detect the runtime, derive the app id from the directory name).
 2. Run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/deploy.mjs"`.
-3. The script prints NDJSON stage events on stderr — one per **real** stage: `upload`, `build`, `provision` (or `publish` for static), `live`. Render them as a live checklist, one line each, ticking `✓` as each `ok` arrives: the stage label, the event's `detail` if present, and its elapsed `ms` (as seconds) — only fields present on the event. For example:
+3. The script prints NDJSON stage events on stderr — one per **real** stage: `upload`, `build`, `provision` (or `publish` for static), `startup`, `live`, and for a dynamic app `health`. Render them as a live checklist, one line each, ticking `✓` as each `ok` arrives (`✗` for `fail`): the stage label, the event's `detail` if present, and its elapsed `ms` (as seconds) — only fields present on the event. For example:
    ```
    ✓ Uploading source      2.1 MB                1.4s
    ✓ Building image         buildpack · node      38.2s
    ✓ Provisioning           service               9.8s
+   ✓ Startup                                      5.1s
    ✓ Live
      https://hello-tamari.ontamariusercontent.com
+   ✓ Health                 GET /healthz → 200    0.6s
    ```
-   Render only the events emitted — never invent a stage or a timing. A `{ "t": "note" }` line is advisory, not a stage: relay its `note` to the user in one line and continue.
+   Render only the events emitted — never invent a stage or a timing. A `{ "t": "note" }` line is advisory, not a stage: relay its `note` to the user in one line and continue (a note about **local file writes** means uploads or generated media would be wiped when the app sleeps — say so).
+
+   **`startup ok` only means the port opened.** The `health` stage is the first request that reaches the app's own code; it is the line that says the app works.
 4. Read the final stdout JSON:
-   - `{ ok: true, url, app }` → present the live result: the URL, that it is **private to the owner**, that it sleeps when idle and wakes on request, and how to reach it (sign in at ontamari.com, tap the launcher icon; on iPhone: Share → Add to Home Screen).
+   - `{ ok: true, url, app, health }` → if `health.status` is `200` (or `health` is absent, for a static site), present the live result: the URL, that it is **private to the owner**, that it sleeps when idle and wakes on request, and how to reach it (sign in at ontamari.com, tap the launcher icon; on iPhone: Share → Add to Home Screen). If `health.status` is anything else, or a `warning` is present, the app is **live but not working**: show `health.body`, run `node "${CLAUDE_PLUGIN_ROOT}/skills/tamari/logs.mjs"` and read its `notes` and `entries` before proposing a fix, and do not call the deploy a success. A health path that is not 200 also fails every wake after the app sleeps.
    - `{ ok: false, errorCode, error }` → follow the errorCode table in the **tamari** skill: fix-and-redeploy for the project's own errors; for the "do not modify the project" codes, report and retry — do not loop.
    - `local_database_detected` in particular is **yours to fix, not the user's**: the app stores data in a local SQLite file that a sleeping container wipes. Run `migrate-db.mjs`; port what it cannot rewire to Postgres; set `requiresDatabase: true`; redeploy. Tell the user in one line what you did and why ("moved your data to Tamari's managed Postgres so it survives").
    - `lockfile_platform_mismatch` is likewise **yours to fix**: the committed `package-lock.json` never recorded the Linux natives the builder installs (npm/cli#4828, typical of lockfiles grown on an ARM Mac). Delete `node_modules` (every workspace's too) and `package-lock.json`, run `npm install`, commit the regenerated lockfile, redeploy — and tell the user in one line why ("regenerated your lockfile so it installs on Linux").

@@ -36,11 +36,15 @@ Then, in any project, just say what you want:
   Next.js app that can export statically gets a zero cold start.
 - **Holds your secrets** encrypted, injected as environment variables at deploy
   time, never in the committed manifest.
+- **Reads the container log from the terminal**, so the agent diagnoses a
+  broken deploy itself instead of asking you to paste lines from a dashboard —
+  and checks the app's health path after every deploy, because "the port
+  opened" and "the app works" are different facts.
 
 Plain-language requests work in both hosts. Claude Code also exposes these
 optional slash commands: `/tamari:deploy`, `/tamari:status`, `/tamari:share`,
-`/tamari:secrets`, `/tamari:delete`, `/tamari:start`. Codex invokes the same
-workflows through the Tamari skill rather than those aliases.
+`/tamari:secrets`, `/tamari:logs`, `/tamari:delete`, `/tamari:start`. Codex
+invokes the same workflows through the Tamari skill rather than those aliases.
 
 ## What it needs
 

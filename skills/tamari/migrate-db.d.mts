@@ -6,7 +6,9 @@ export type FrameworkMatch = {
   reason?: string;
   nextSteps?: string[];
 };
-export type Detection = { matches: FrameworkMatch[]; dataFiles: string[] };
+/** A file that writes to the app's own disk, and the first pattern that showed it. */
+export type LocalWrite = { path: string; pattern: string };
+export type Detection = { matches: FrameworkMatch[]; dataFiles: string[]; localWrites?: LocalWrite[] };
 export type Edit = { path: string; newContent: string; summary: string };
 export type Report = {
   ok: boolean;
@@ -15,12 +17,19 @@ export type Report = {
   warnings: string[];
   requiresDatabaseSet: boolean;
   dataAtRisk: string[];
+  localWrites: LocalWrite[];
   nextSteps: string[];
 };
 
 export const DETECTORS: Array<(project: ProjectFile[]) => FrameworkMatch | null>;
 export const PLANNERS: Record<string, (project: ProjectFile[], match: FrameworkMatch) => Edit[]>;
+/** What a SQLite → Postgres port hits in any language; every line broke a real port. */
+export const SQLITE_TO_POSTGRES_CHECKLIST: string[];
+/** The node-postgres (`pg`) specific half of that checklist. */
+export const NODE_PG_CHECKLIST: string[];
 export function dataFilesAtRisk(project: ProjectFile[]): string[];
+/** Places the app writes to its own disk (advisory — never a refusal). Pure — unit-tested. */
+export function detectLocalWrites(project: ProjectFile[]): { files: LocalWrite[] };
 export function detectPersistence(project: ProjectFile[]): Detection;
 export function buildReport(detection: Detection, edits: Edit[]): Report;
 export function applyEdits(edits: Edit[], write?: (path: string, content: string) => void): void;

@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const CMD_DIR = "commands";
-const COMMANDS = ["deploy.md", "start.md", "share.md", "secrets.md", "delete.md", "status.md"];
+const COMMANDS = ["deploy.md", "start.md", "share.md", "secrets.md", "delete.md", "status.md", "logs.md"];
 
 describe("plugin commands", () => {
   it("ships exactly the commands the plugin documents", () => {

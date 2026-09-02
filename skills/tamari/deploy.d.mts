@@ -28,15 +28,43 @@ export function manifestForDeploy<T extends Record<string, unknown>>(
   publishDir: string | undefined,
 ): T & { runtime?: string; resourceClass?: string };
 
-/** tar argv: the publish dir's contents when set, else the tracked file list. */
-export function tarArgs(publishDir: string | null | undefined, archivePath: string): string[];
+/**
+ * tar argv: the publish dir's contents when set, else the tracked file list.
+ * `--no-xattrs` is included unless `xattrs` is true (the retry for a tar that
+ * does not know the flag): macOS extended attributes travel as pax headers
+ * and are materialised as `._name` sidecars by some extractors.
+ */
+export function tarArgs(publishDir: string | null | undefined, archivePath: string, opts?: { xattrs?: boolean }): string[];
+
+/** The environment tar runs in: `COPYFILE_DISABLE=1` so bsdtar writes no AppleDouble entries. */
+export function tarEnv<T extends Record<string, string | undefined>>(env: T): T & { COPYFILE_DISABLE: "1" };
+
+/**
+ * A deployment failure, renamed when the message shows the platform's startup
+ * TCP probe never saw the port open: that is `revision_failed` (the project's
+ * startup path) whatever code it arrived under, with the bind-first fix attached.
+ */
+export function classifyDeployFailure(errorCode: string | undefined | null, message: string | undefined | null): DeployFailure;
+
+/** What one GET of the health path after go-live says about the app. `status` null means no answer. */
+export function healthOutcome(
+  path: string,
+  status: number | null,
+  bodyText: string | null | undefined,
+): { path: string; status: number | null; body: string; ok: true } | { path: string; status: number | null; body: string; ok: false; warning: string };
+
+/** The advisory note for an app that writes files to its own disk, or null. */
+export function localWritesNote(
+  manifest: { runtime?: string; [key: string]: unknown },
+  writes: { files: Array<{ path: string; pattern: string }> } | null | undefined,
+): string | null;
 
 /** Human-readable byte size for status detail. Pure — unit-tested. */
 export function humanBytes(n: number): string;
 
 /** A single client-observable stage event. */
 export interface StageEvent {
-  stage: "queue" | "build" | "provision" | "publish" | "live" | "deploy";
+  stage: "queue" | "build" | "provision" | "publish" | "startup" | "live" | "health" | "deploy";
   status: "start" | "ok" | "fail";
 }
 
